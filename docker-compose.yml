@@ -1,0 +1,45 @@
+name: edumate
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: edumate-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-edumate_root_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-edumate}
+      MYSQL_USER: ${MYSQL_USER:-edumate}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edumate_dev_password}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    ports:
+      - "${MYSQL_PORT:-3307}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: edumate-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  redis_data:

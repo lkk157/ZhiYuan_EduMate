@@ -1,0 +1,43 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/uploads/*
+!data/uploads/.gitkeep
+data/*.db
+data/*.db-journal
+data/*.db-wal
+!data/.gitkeep
+*.log
+logs/
+
+# Frontend
+web/node_modules/
+web/dist/
+web/coverage/
+web/.vite/
+npm-debug.log*
+yarn-error.log*
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local archives
+*.zip
+*.7z

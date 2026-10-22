@@ -1,0 +1,170 @@
+/* ==========================================================================
+   EduMate design tokens
+   Visual language: light blue / white, soft rounded cards, calm academic blue.
+   Reference: project planning screenshots.
+   ========================================================================== */
+:root {
+  --em-primary: #1677ff;
+  --em-primary-dark: #0f5fd6;
+  --em-primary-soft: #e8f2ff;
+  --em-primary-softer: #f2f8ff;
+  --em-bg: #f5f7fb;
+  --em-surface: #ffffff;
+  --em-text: #1f2d3d;
+  --em-text-secondary: #6b7a90;
+  --em-text-muted: #98a6b8;
+  --em-border: #e8eef7;
+  --em-success: #22c55e;
+  --em-warning: #f59e0b;
+  --em-danger: #ef4444;
+  --em-radius-lg: 18px;
+  --em-radius-md: 14px;
+  --em-radius-sm: 10px;
+  --em-shadow-card: 0 10px 30px rgba(31, 45, 61, 0.06);
+  --em-shadow-float: 0 18px 50px rgba(22, 119, 255, 0.16);
+  --em-sidebar-width: 232px;
+  --em-font: "Inter", "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--em-bg);
+  color: var(--em-text);
+  font-family: var(--em-font);
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Common surfaces
+   -------------------------------------------------------------------------- */
+.em-card {
+  background: var(--em-surface);
+  border: 1px solid var(--em-border);
+  border-radius: var(--em-radius-lg);
+  box-shadow: var(--em-shadow-card);
+}
+
+.em-page {
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.em-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.em-page-header h1 {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.em-page-header p {
+  margin-top: 4px;
+  color: var(--em-text-secondary);
+}
+
+.em-eyebrow {
+  color: var(--em-text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.em-muted {
+  color: var(--em-text-secondary);
+}
+
+/* --------------------------------------------------------------------------
+   Element Plus overrides
+   -------------------------------------------------------------------------- */
+.el-button--primary {
+  --el-button-bg-color: var(--em-primary);
+  --el-button-border-color: var(--em-primary);
+  --el-button-hover-bg-color: var(--em-primary-dark);
+  --el-button-hover-border-color: var(--em-primary-dark);
+  --el-button-active-bg-color: var(--em-primary-dark);
+}
+
+.el-input__wrapper {
+  border-radius: var(--em-radius-sm);
+  box-shadow: 0 0 0 1px var(--em-border) inset;
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--em-primary) inset;
+}
+
+.el-card {
+  border-radius: var(--em-radius-lg);
+  border-color: var(--em-border);
+  box-shadow: var(--em-shadow-card);
+}
+
+.el-table {
+  --el-table-border-color: var(--em-border);
+  --el-table-header-bg-color: #f8faff;
+  --el-table-header-text-color: #53657d;
+  --el-table-row-hover-bg-color: var(--em-primary-softer);
+}
+
+.el-tag {
+  border-radius: 999px;
+}
+
+.el-message {
+  border-radius: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   Scrollbar
+   -------------------------------------------------------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd7e6;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
