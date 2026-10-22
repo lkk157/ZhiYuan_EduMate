@@ -34,7 +34,7 @@
 
 | 编号 | 阶段 | 状态 | 提交 |
 |---|---|---|---|
-| P1.1 | 工程骨架、设计系统与登录壳 | 已完成 | `chore: bootstrap EduMate backend, frontend and local infrastructure` |
+| P1.1 | 工程骨架、设计系统与登录壳 | 已完成 | `7045b53` · `chore: bootstrap EduMate backend, frontend and local infrastructure` |
 | P1.2 | 认证、RBAC 与三角色布局 | 待开始 | — |
 | P1.3 | 管理员治理：用户、角色、审计 | 待开始 | — |
 | P1.4 | 课程体系与审核流 | 待开始 | — |
@@ -70,8 +70,8 @@
 - **验收记录（2026-10-22）**：
   - 后端 `pytest -q`：10 passed；`ruff check`：通过；`ruff format --check`：通过。
   - 前端 `npm run test:unit -- --run`：4 个测试文件 / 9 个测试通过；`npm run build`：成功。
-  - 运行时：`GET /api/v1/health/live` 200；`GET /api/v1/health/ready` 200（database=ok、redis=ok，使用 SQLite 开发库 + Docker Redis 验证）。
-  - 环境说明：Docker Hub 拉取 `mysql:8.0` 镜像受网络影响未在验收时完成；`docker-compose.yml` 的 MySQL 3307 配置已就绪，迁移已用 SQLite 验证通过。P1.2 前继续尝试拉取，或在确认后改用本地 MySQL/SQLite 开发。
+  - 运行时：`GET /api/v1/health/live` 200；`GET /api/v1/health/ready` 200（database=ok、redis=ok）。
+  - 基础设施：`edumate-mysql`（mysql:8.0，3307）与 `edumate-redis`（redis:7-alpine，6379）均为 healthy；`alembic upgrade head` 已在 MySQL 上成功执行。
 
 ### P1.2 认证、RBAC 与三角色布局
 
