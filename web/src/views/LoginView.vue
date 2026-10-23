@@ -1,8 +1,8 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Lock, User } from '@element-plus/icons-vue'
+import { Lock, Message, User } from '@element-plus/icons-vue'
 
 import BrandLogo from '@/components/BrandLogo.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -12,24 +12,122 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
+const mode = ref('login')
 const formRef = ref()
-const form = reactive({ username: '', password: '' })
-const rules = {
+const form = reactive({
+  username: '',
+  password: '',
+  confirmPassword: '',
+  email: '',
+})
+
+const isRegister = computed(() => mode.value === 'register')
+const heading = computed(() => (isRegister.value ? '创建学生账号' : '欢迎回来'))
+const subheading = computed(() =>
+  isRegister.value
+    ? '注册后即可加入课程、使用 AI 学伴并建立个人知识库'
+    : '登录后进入你的学习与教学工作空间',
+)
+const submitText = computed(() => (isRegister.value ? '注册并登录' : '登录'))
+
+function confirmValidator(_rule, value, callback) {
+  if (!value) {
+    callback(new Error('请再次输入密码'))
+  } else if (value !== form.password) {
+    callback(new Error('两次输入的密码不一致'))
+  } else {
+    callback()
+  }
+}
+
+function emailValidator(_rule, value, callback) {
+  if (!value) {
+    callback()
+    return
+  }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim())) {
+    callback(new Error('请输入正确的邮箱地址'))
+    return
+  }
+  callback()
+}
+
+const rules = computed(() => ({
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, max: 32, message: '用户名长度为 3-32 个字符', trigger: 'blur' },
   ],
   password: [
     { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, max: 64, message: '密码长度为 6-64 个字符', trigger: 'blur' },
+    {
+      min: isRegister.value ? 8 : 6,
+      max: 64,
+      message: isRegister.value ? '密码长度为 8-64 个字符' : '密码长度为 6-64 个字符',
+      trigger: 'blur',
+    },
   ],
+  confirmPassword: isRegister.value
+    ? [
+        { required: true, message: '请再次输入密码', trigger: 'blur' },
+        { validator: confirmValidator, trigger: 'blur' },
+      ]
+    : [],
+  email: isRegister.value
+    ? [{ validator: emailValidator, trigger: 'blur' }]
+    : [],
+}))
+
+function switchMode(next) {
+  if (mode.value === next) return
+  mode.value = next
+  form.password = ''
+  form.confirmPassword = ''
+  formRef.value?.clearValidate()
+}
+
+async function validateForm() {
+  try {
+    await formRef.value?.validate()
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function onLogin() {
+  try {
+    const user = await auth.login({
+      username: form.username.trim(),
+      password: form.password,
+    })
+    ElMessage.success('登录成功')
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+    router.push(redirect || homePathForRole(user?.role))
+  } catch (error) {
+    ElMessage.error(error?.message || '登录失败，请稍后重试')
+  }
+}
+
+async function onRegister() {
+  try {
+    const user = await auth.register({
+      username: form.username.trim(),
+      password: form.password,
+      password_confirm: form.password,
+      email: form.email.trim() || null,
+    })
+    ElMessage.success('注册成功，已为你登录')
+    router.push(homePathForRole(user?.role || 'student'))
+  } catch (error) {
+    ElMessage.error(error?.message || '注册失败，请稍后重试')
+  }
 }
 
 async function onSubmit() {
   const username = form.username.trim()
 
-  // Defensive client-side gate: never call the API with empty credentials,
-  // even if a component-level validation quirk lets the submit through.
+  // Defensive client-side gate: keep the UX consistent even if a
+  // component-level validation quirk lets an invalid submit through.
   if (!username || !form.password) {
     ElMessage.warning('请输入用户名和密码')
     formRef.value?.validate().catch(() => {})
@@ -39,24 +137,33 @@ async function onSubmit() {
     ElMessage.warning('用户名长度为 3-32 个字符')
     return
   }
-  if (form.password.length < 6 || form.password.length > 64) {
+  if (isRegister.value) {
+    if (form.password.length < 8) {
+      ElMessage.warning('密码长度为 8-64 个字符')
+      return
+    }
+    if (form.password !== form.confirmPassword) {
+      ElMessage.warning('两次输入的密码不一致')
+      return
+    }
+    if (
+      form.email &&
+      !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())
+    ) {
+      ElMessage.warning('请输入正确的邮箱地址')
+      return
+    }
+  } else if (form.password.length < 6) {
     ElMessage.warning('密码长度为 6-64 个字符')
     return
   }
 
-  try {
-    await formRef.value?.validate()
-  } catch {
-    return
-  }
+  if (!(await validateForm())) return
 
-  try {
-    const user = await auth.login({ username: form.username, password: form.password })
-    ElMessage.success('登录成功')
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-    router.push(redirect || homePathForRole(user?.role))
-  } catch (error) {
-    ElMessage.error(error?.message || '登录失败，请稍后重试')
+  if (isRegister.value) {
+    await onRegister()
+  } else {
+    await onLogin()
   }
 }
 </script>
@@ -65,10 +172,27 @@ async function onSubmit() {
   <div class="login-card">
     <BrandLogo class="login-brand" />
 
+    <div class="auth-switch" role="tablist">
+      <button
+        type="button"
+        :class="{ active: mode === 'login' }"
+        @click="switchMode('login')"
+      >
+        登录
+      </button>
+      <button
+        type="button"
+        :class="{ active: mode === 'register' }"
+        @click="switchMode('register')"
+      >
+        注册
+      </button>
+    </div>
+
     <div class="login-heading">
-      <span class="em-eyebrow">WELCOME BACK</span>
-      <h2>欢迎回来</h2>
-      <p>登录后进入你的学习与教学工作空间</p>
+      <span class="em-eyebrow">{{ isRegister ? 'CREATE ACCOUNT' : 'WELCOME BACK' }}</span>
+      <h2>{{ heading }}</h2>
+      <p>{{ subheading }}</p>
     </div>
 
     <el-form
@@ -83,9 +207,19 @@ async function onSubmit() {
       <el-form-item label="用户名" prop="username">
         <el-input
           v-model="form.username"
-          placeholder="请输入用户名"
+          placeholder="3-32 个字符，登录时不区分大小写"
           autocomplete="username"
           :prefix-icon="User"
+        />
+      </el-form-item>
+
+      <el-form-item v-if="isRegister" label="邮箱（选填）" prop="email">
+        <el-input
+          v-model="form.email"
+          type="email"
+          placeholder="用于找回账号，可选"
+          autocomplete="email"
+          :prefix-icon="Message"
         />
       </el-form-item>
 
@@ -94,15 +228,27 @@ async function onSubmit() {
           v-model="form.password"
           type="password"
           show-password
-          placeholder="请输入密码"
-          autocomplete="current-password"
+          :placeholder="isRegister ? '至少 8 个字符' : '请输入密码'"
+          :autocomplete="isRegister ? 'new-password' : 'current-password'"
+          :prefix-icon="Lock"
+        />
+      </el-form-item>
+
+      <el-form-item v-if="isRegister" label="确认密码" prop="confirmPassword">
+        <el-input
+          v-model="form.confirmPassword"
+          type="password"
+          show-password
+          placeholder="请再次输入密码"
+          autocomplete="new-password"
           :prefix-icon="Lock"
         />
       </el-form-item>
 
       <div class="login-options">
-        <el-checkbox>记住登录状态</el-checkbox>
-        <button class="link-button" type="button">忘记密码？</button>
+        <el-checkbox v-if="!isRegister">记住登录状态</el-checkbox>
+        <span v-else class="register-note">注册后默认为学生角色</span>
+        <button v-if="!isRegister" class="link-button" type="button">忘记密码？</button>
       </div>
 
       <el-button
@@ -112,13 +258,18 @@ async function onSubmit() {
         class="login-submit"
         :loading="auth.loading"
       >
-        登录
+        {{ submitText }}
       </el-button>
     </el-form>
 
     <div class="login-hint">
       <el-icon><InfoFilled /></el-icon>
-      <span>账号由管理员统一分配。学生、教师、管理员登录后自动进入对应空间。</span>
+      <span v-if="isRegister">
+        学生可自助注册；注册后可通过邀请码或教师添加加入课程，并建立自己的知识库。
+      </span>
+      <span v-else>
+        学生可自助注册；教师与管理员账号由管理员统一创建和分配。
+      </span>
     </div>
 
     <div class="login-roles">
@@ -136,7 +287,38 @@ async function onSubmit() {
 }
 
 .login-brand {
-  margin-bottom: 34px;
+  margin-bottom: 26px;
+}
+
+.auth-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #f1f6fd;
+}
+
+.auth-switch button {
+  min-width: 78px;
+  padding: 8px 18px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #62738a;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.auth-switch button.active {
+  background: #fff;
+  color: var(--em-primary);
+  box-shadow: 0 4px 12px rgba(22, 119, 255, 0.16);
+}
+
+.login-heading {
+  margin-top: 22px;
 }
 
 .login-heading h2 {
@@ -152,7 +334,7 @@ async function onSubmit() {
 }
 
 .login-form {
-  margin-top: 28px;
+  margin-top: 24px;
 }
 
 .login-form :deep(.el-form-item__label) {
@@ -171,6 +353,11 @@ async function onSubmit() {
   align-items: center;
   justify-content: space-between;
   margin: 2px 0 20px;
+}
+
+.register-note {
+  color: var(--em-text-muted);
+  font-size: 12px;
 }
 
 .link-button {
@@ -214,7 +401,7 @@ async function onSubmit() {
   display: flex;
   justify-content: center;
   gap: 20px;
-  margin-top: 26px;
+  margin-top: 22px;
   color: var(--em-text-muted);
   font-size: 12px;
 }

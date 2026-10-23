@@ -17,6 +17,11 @@ TOKEN_TYPE = "access"
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def normalize_username(username: str) -> str:
+    """Usernames are stored and looked up case-insensitively."""
+    return username.strip().lower()
+
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 

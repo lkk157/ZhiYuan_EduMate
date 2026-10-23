@@ -3,22 +3,73 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
-from app.core.errors import AuthError, ValidationError
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.errors import (
+    AuthError,
+    ConflictError,
+    ServiceUnavailableError,
+    ValidationError,
+)
+from app.core.security import (
+    create_access_token,
+    hash_password,
+    normalize_username,
+    verify_password,
+)
 from app.db.base import utc_now
-from app.db.models.rbac import Role, User
+from app.db.models.rbac import ROLE_STUDENT, USER_STATUS_ACTIVE, Role, User
 
 USER_WITH_PERMISSIONS = selectinload(User.role).selectinload(Role.permissions)
 
 
 async def get_user_by_username(db: AsyncSession, username: str) -> User | None:
     return await db.scalar(
-        select(User).options(USER_WITH_PERMISSIONS).where(User.username == username)
+        select(User)
+        .options(USER_WITH_PERMISSIONS)
+        .where(User.username == normalize_username(username))
     )
+
+
+async def register_student(
+    db: AsyncSession,
+    *,
+    username: str,
+    password: str,
+    email: str | None = None,
+) -> User:
+    """Self-registration is limited to the student role."""
+    normalized = normalize_username(username)
+    if await db.scalar(select(User).where(User.username == normalized)):
+        raise ConflictError("用户名已被注册")
+
+    if email:
+        if await db.scalar(select(User).where(User.email == email)):
+            raise ConflictError("邮箱已被注册")
+
+    role = await db.scalar(
+        select(Role).options(selectinload(Role.permissions)).where(Role.name == ROLE_STUDENT)
+    )
+    if role is None:
+        raise ServiceUnavailableError("学生角色未初始化，请联系管理员")
+
+    user = User(
+        username=normalized,
+        email=email,
+        password_hash=hash_password(password),
+        role=role,
+        status=USER_STATUS_ACTIVE,
+    )
+    db.add(user)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise ConflictError("用户名或邮箱已被注册") from exc
+    return user
 
 
 async def authenticate(db: AsyncSession, username: str, password: str) -> User:

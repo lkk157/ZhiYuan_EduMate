@@ -21,10 +21,13 @@
 - 统一成功响应 `{"code":0,"message":"ok","data":...}`；错误使用 `app/core/errors.py` 的 `AppError` 体系（401/403/404/409/422/502/503）。
 - 请求 ID 通过 `X-Request-ID` 透传，日志格式含 `[request_id]`。
 - Redis 仅作可选缓存，任何 Redis 故障必须降级，不得阻塞业务。
-- 所有资源接口必须做归属/角色校验；学生只能访问 `approved` 课程与资料；禁止只靠前端隐藏。
+- 所有资源接口必须做归属/角色校验；学生只能访问“已选且 `approved`”的课程与资料；禁止只靠前端隐藏。
+- 学生可自助注册，默认 `student` 角色；教师/管理员账号由管理员创建，禁止自助注册为高权限角色。
+- 课程访问必须校验 `course_enrollments`；教师可生成邀请码或按用户名添加学生；邀请码仅对 `approved` 课程有效。
+- 学生个人知识库按 `owner_id` 隔离；个人资料直接索引、无需管理员审核；每个知识库独立 RAG 分组。
+- 课程资料审核通过后才索引，避免未发布内容进入课程 RAG 分组。
 - JWT 载荷 `sub/ver/role/iat/exp`；角色/密码变更递增 `token_version`。
 - RAG 资料文件名固定 `m{material_id}__{sanitized_original}`；引用解析正则 `^m(\d+)__(.+)$`。
-- 资料审核通过后才索引，避免未发布内容进入 RAG 分组。
 - RAG 429 按 `Retry-After` 最多重试 1 次；问答超时 300s；失败降级并记录。
 - 后端端口 8001，RAG 8000，MySQL 宿主 3307，Web Docker 8080。
 

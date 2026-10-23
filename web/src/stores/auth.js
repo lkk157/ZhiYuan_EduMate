@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia'
 
-import { fetchMe, login as loginApi } from '@/api/auth'
+import {
+  fetchMe,
+  login as loginApi,
+  register as registerApi,
+} from '@/api/auth'
 import { TOKEN_KEY, USER_KEY } from '@/api/http'
 
 function readStoredUser() {
@@ -40,15 +44,29 @@ export const useAuthStore = defineStore('auth', {
       }
     },
 
+    applyAuthPayload(body) {
+      const data = body?.data || {}
+      this.token = data.access_token || ''
+      this.user = data.user || null
+      this.persist()
+      return this.user
+    },
+
     async login(credentials) {
       this.loading = true
       try {
         const body = await loginApi(credentials)
-        const data = body?.data || {}
-        this.token = data.access_token || ''
-        this.user = data.user || null
-        this.persist()
-        return this.user
+        return this.applyAuthPayload(body)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    async register(payload) {
+      this.loading = true
+      try {
+        const body = await registerApi(payload)
+        return this.applyAuthPayload(body)
       } finally {
         this.loading = false
       }

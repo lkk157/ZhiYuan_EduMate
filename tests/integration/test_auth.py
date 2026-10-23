@@ -174,3 +174,105 @@ async def test_disabling_user_invalidates_existing_token(client, seeded, session
 
     assert response.status_code == 401
     assert "禁用" in response.json()["message"]
+
+
+async def test_student_self_registration_returns_token_and_student_role(client, seeded):
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "NewStudent",
+            "password": "NewSecret123!",
+            "password_confirm": "NewSecret123!",
+            "email": "new.student@example.com",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["code"] == 0
+    data = body["data"]
+    assert data["access_token"]
+    assert data["user"]["username"] == "newstudent"
+    assert data["user"]["role"] == "student"
+    assert data["user"]["email"] == "new.student@example.com"
+    assert "qa:ask" in data["user"]["permissions"]
+    assert "user:manage" not in data["user"]["permissions"]
+
+    me = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {data['access_token']}"},
+    )
+    assert me.status_code == 200
+    assert me.json()["data"]["username"] == "newstudent"
+
+    # Username lookups are case-insensitive.
+    login_response = await login(client, "NEWSTUDENT", "NewSecret123!")
+    assert login_response.status_code == 200
+
+
+async def test_duplicate_username_registration_is_rejected(client, seeded):
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "student",
+            "password": "NewSecret123!",
+            "password_confirm": "NewSecret123!",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 1005
+
+
+async def test_duplicate_email_registration_is_rejected(client, seeded):
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "anotherstudent",
+            "password": "NewSecret123!",
+            "password_confirm": "NewSecret123!",
+            "email": "student@edumate.local",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 1005
+
+
+async def test_registration_validates_password_confirmation_and_strength(client, seeded):
+    mismatch = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "mismatchuser",
+            "password": "NewSecret123!",
+            "password_confirm": "Different123!",
+        },
+    )
+    weak = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "weakuser",
+            "password": "short",
+            "password_confirm": "short",
+        },
+    )
+
+    assert mismatch.status_code == 422
+    assert mismatch.json()["code"] == 1001
+    assert weak.status_code == 422
+    assert weak.json()["code"] == 1001
+
+
+async def test_registration_validates_email_format(client, seeded):
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "username": "bademailuser",
+            "password": "NewSecret123!",
+            "password_confirm": "NewSecret123!",
+            "email": "not-an-email",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == 1001

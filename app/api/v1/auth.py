@@ -13,11 +13,34 @@ from app.schemas.auth import (
     ChangePasswordRequest,
     LoginRequest,
     LoginResponse,
+    RegisterRequest,
     UserOut,
 )
-from app.services.auth_service import authenticate, change_password, issue_token
+from app.services.auth_service import (
+    authenticate,
+    change_password,
+    issue_token,
+    register_student,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/register", status_code=201)
+async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) -> dict:
+    user = await register_student(
+        db,
+        username=body.username,
+        password=body.password,
+        email=body.email,
+    )
+    token, expires_in = issue_token(user)
+    payload = LoginResponse(
+        access_token=token,
+        expires_in=expires_in,
+        user=UserOut.from_user(user),
+    )
+    return success(payload.model_dump(), "注册成功")
 
 
 @router.post("/login")

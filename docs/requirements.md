@@ -1,19 +1,21 @@
 # EduMate 需求说明
 
-> 版本：v1.0（2026-10-22）
-> 来源：`项目规划.md`、`智课学伴 EduMate 项目规划（双服务架构）.md` 与现有 RAG 服务勘察结果。
+> 版本：v1.1（2026-10-23）
+> 来源：`项目规划.md`、`智课学伴 EduMate 项目规划（双服务架构）.md`、现有 RAG 服务勘察结果，以及 2026-10-23 的需求扩展（学生自助注册、课程邀请码/选课、个人知识库）。
 
 ## 1. 项目概述
 
 - **名称**：智课学伴 EduMate
 - **定位**：基于 FastAPI 与 RAG 的 AI 个性化学习与课程教学平台
 - **性质**：本科毕业设计，分两阶段交付，每阶段有可演示成品
-- **角色**：学生、教师、管理员
+- **角色**：学生（可自助注册）、教师、管理员
 - **核心能力**：
   1. 课程知识库 RAG 问答（带引用来源）
   2. 个性化学习推荐（习题、资料、学习路径）
   3. 教师学情分析看板
   4. 管理员系统治理（用户、权限、审核、配置、审计、监控）
+  5. 课程邀请码与选课（教师生成邀请码/直接拉人，学生凭码加入）
+  6. 学生个人知识库（学生自建知识库并上传自己的学习资料）
 
 ## 2. 总体架构
 
@@ -54,9 +56,11 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 
 | EduMate 语义 | 适配方式 |
 |---|---|
-| 课程知识库 | 每课程一个 RAG 分组；`course.rag_group_id` |
-| 资料索引 | 审核通过后上传；`rag_filename = m{material_id}__{原文件名}`；保存 `doc_id` |
-| 引用回映射 | 正则 `^m(\d+)__(.+)$` → material → chapter/knowledge；失败时原始展示 |
+| 课程知识库 | 每课程一个 RAG 分组；`course.rag_group_id`；课程资料审核通过后索引 |
+| 个人知识库 | 每个学生知识库一个 RAG 分组；`knowledge_base.rag_group_id`；按 owner 隔离；个人资料直接索引、无需管理员审核 |
+| 资料索引 | 课程资料审核通过后上传；个人资料由本人上传；`rag_filename = m{material_id}__{原文件名}`；保存 `doc_id` |
+| 引用回映射 | 正则 `^m(\d+)__(.+)$` → material → 课程章节/个人知识库；失败时原始展示 |
+| 问答范围 | `scope=course` 用课程分组；`scope=personal` 用本人知识库分组；`scope=all` 合并已选课程 + 本人知识库分组 |
 | 删除 | 业务软删除；说明向量残留限制 |
 | 健康 | `/healthz` + 鉴权分组列表，返回 `reachable/auth_ok/latency_ms` |
 | 限流 | 429 退避重试 1 次；问答 300s；失败降级 |
@@ -65,15 +69,16 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 
 ### 5.1 第一阶段（MVP）
 
-1. 用户/角色/权限：学生、教师、管理员登录与基础 RBAC。
+1. 用户/角色/权限：学生自助注册；三角色登录与基础 RBAC。
 2. 管理员基础：用户管理、角色分配、课程/资料审核、操作日志。
 3. 课程管理：教师建课、章节、知识点、资料上传。
-4. 知识库：文档上传、解析、分块、向量化、索引状态。
-5. RAG 问答：检索 + LLM 生成 + 引用来源。
-6. 问答记录：保存问题、回答、引用、耗时。
-7. 基础推荐：热门资源、同章节资源、相似资源。
-8. 三端前端：学生端、教师端、管理员端基础页面。
-9. Docker Compose 部署：MySQL、Redis、API、Web。
+4. 选课：课程邀请码、学生凭码加入、教师按用户名添加/移除学生。
+5. 知识库：课程资料审核后索引；学生可创建个人知识库并上传自己的资料。
+6. RAG 问答：课程/个人知识库/全部范围检索 + LLM 生成 + 引用来源。
+7. 问答记录：保存问题、回答、引用、耗时、范围。
+8. 基础推荐：已选课程内的热门资源、同章节资源、相似资源。
+9. 三端前端：学生端、教师端、管理员端基础页面。
+10. Docker Compose 部署：MySQL、Redis、API、Web。
 
 **非目标**：直播、支付、复杂考试、EduMate 内自研向量检索/LLM 生成。
 
@@ -91,11 +96,18 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 
 ## 6. 核心数据模型
 
-阶段一：`roles`、`permissions`、`role_permissions`、`users`、`courses`、`chapters`、`knowledges`、`materials`、`qa_records`、`audit_logs`。
+阶段一：`roles`、`permissions`、`role_permissions`、`users`、`courses`、`chapters`、`knowledges`、`course_enrollments`、`knowledge_bases`、`materials`、`qa_records`、`audit_logs`。
+
+关键字段扩展：
+- `courses`：`invite_code`（唯一）、`invite_code_enabled`、`rag_group_id`。
+- `course_enrollments`：`course_id`、`student_id`、`source`（`invite_code` / `teacher_add`）、`status`、`created_at`；唯一约束 `(course_id, student_id)`。
+- `knowledge_bases`：`owner_id`、`name`、`description`、`rag_group_id`、`is_default`、`status`。
+- `materials`：`scope`（`course` / `personal`）、`knowledge_base_id`（个人资料）、`owner_id`、`course_id`/`chapter_id` 可空；`index_status ∈ pending/indexing/indexed/failed`。
+- `qa_records`：`scope`、`knowledge_base_id`（可空）、`references_json`。
 
 阶段二：`exercises`、`answer_records`、`learning_events`、`knowledge_mastery`、`knowledge_edges`、`recommend_logs`、`system_configs`、`ab_tests`。
 
-约定：主键 bigint 自增；utf8mb4；软删除用 `status`；JSON 字段用 MySQL JSON 类型；`material.index_status ∈ pending/indexing/indexed/failed`。
+约定：主键 bigint 自增；utf8mb4；软删除用 `status`；JSON 字段用 MySQL JSON 类型；课程/个人资料共用索引流程，但访问权限与审核策略不同。
 
 ## 7. 技术栈
 
@@ -115,8 +127,9 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 
 ## 8. 验收标准
 
-- 三角色可登录、权限隔离；管理员可管用户/课程/资料/日志。
-- 资料上传后可索引；问答可用、引用可溯源、记录可查。
-- 基础推荐有结果并带理由。
+- 学生可自助注册并自动登录；三角色可登录、权限隔离；管理员可管用户/课程/资料/日志。
+- 教师可建课并生成邀请码；学生凭邀请码或教师添加加入课程；未选学生不能访问课程内容。
+- 课程资料审核后可索引；学生个人知识库可创建并上传资料；问答覆盖课程/个人库范围，引用可溯源、记录可查。
+- 基础推荐有结果并带理由，仅覆盖已选课程。
 - 阶段二推荐随掌握度变化且有理由；教师看板有数据；学习路径可动态调整；管理员可治理；RAG 流式可用；评估有可复现指标。
 - 两阶段均可用 Docker Compose 启动并演示。
