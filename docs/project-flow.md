@@ -81,7 +81,8 @@
 - **提交**：`feat(auth): JWT authentication, RBAC and three-role layouts`
 - **验收记录（2026-10-23）**：
   - 后端 `pytest -q`：**25 passed**；`ruff check` / `ruff format --check`：通过。
-  - 前端 `npm run test:unit -- --run`：**4 个测试文件 / 10 个测试通过**；`npm run build`：成功。
+  - 前端 `npm run test:unit -- --run`：**5 个测试文件 / 11 个测试通过**；`npm run build`：成功。
+  - 修复记录：`AuthLayout` 原先使用 `<slot />`，导致嵌套登录子路由不渲染、右侧面板为空；已改为 `<router-view />` 并新增 `AuthLayout.spec.js` 回归测试。浏览器实测登录表单正常显示。
   - 数据库：`alembic upgrade head` 在 MySQL 与 SQLite 上均成功；`alembic downgrade base` 在 SQLite 上成功；`scripts/seed.py` 幂等执行成功（3 角色、12 权限、3 演示账号）。
   - 运行时：admin 登录 12 项权限、teacher 5 项、student 2 项；`/auth/me` 正常；`/admin/ping` 对 admin=200、teacher/student=403。
   - 安全：错误密码与未知用户返回同一提示；禁用用户、旧 token、伪造/过期 token 均被拒绝；改密后旧 token 失效。

@@ -46,7 +46,7 @@ const features = [
 
     <section class="auth-panel">
       <div class="auth-panel-inner">
-        <slot />
+        <router-view />
       </div>
       <p class="auth-copyright">© 2026 智课学伴 EduMate</p>
     </section>
