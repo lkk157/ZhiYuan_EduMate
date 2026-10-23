@@ -37,7 +37,7 @@
 | P1.1 | 工程骨架、设计系统与登录壳 | 已完成 | `7045b53` · `chore: bootstrap EduMate backend, frontend and local infrastructure` |
 | P1.2 | 认证、RBAC 与三角色布局 | 已完成 | `1354042` · `feat(auth): JWT authentication, RBAC and three-role layouts` |
 | P1.2b | 学生自助注册 | 已完成 | `a37c2f3` · `feat(auth): student self-registration` |
-| P1.3 | 管理员治理：用户、角色、审计 | 待开始 | — |
+| P1.3 | 管理员治理：用户、角色、审计 | 已完成 | `0c2110e` · `feat(admin): user, role and audit management` |
 | P1.4 | 课程体系、邀请码与选课 | 待开始 | — |
 | P1.5 | 课程资料上传、审核与 RAG 索引 | 待开始 | — |
 | P1.6 | 学生个人知识库与资料索引 | 待开始 | — |
@@ -109,6 +109,14 @@
 - **测试**：重复用户名、非法角色、自我禁用、最后管理员、权限矩阵、审计分页与脱敏。
 - **验证**：创建教师 → 改角色 → 禁用 → 查审计闭环。
 - **提交**：`feat(admin): user, role and audit management`
+- **验收记录（2026-10-23）**：
+  - 后端 `pytest -q`：**45 passed**；`ruff check app tests` / `ruff format --check app tests`：通过。
+  - 前端 `npm run test:unit -- --run`：**8 个测试文件 / 20 个测试通过**；`npm run build`：成功。
+  - 数据库：新增 `audit_logs` 表迁移 `8f7e6d5c4b3a`，已在 MySQL 与 SQLite 测试库验证。
+  - 新增接口：`GET /admin/stats`、`GET/POST /admin/users`、`PUT /admin/users/{id}`、`PUT /admin/users/{id}/status`、`POST /admin/users/{id}/reset-password`、`GET /admin/roles`、`GET /admin/audit-logs`；均受 `user:manage` / `role:manage` / `audit:view` 权限保护。
+  - 安全：登录成功/失败均写审计；创建/改角色/启禁用/重置密码写审计；密码、token、API Key 等敏感字段递归脱敏；禁止禁用自己；禁止禁用或降级最后一个启用管理员；改角色、禁用、重置密码均递增 `token_version`，旧令牌立即失效。
+  - 运行时闭环：管理员登录 → 创建教师 `p13check*` → 改为学生并修改邮箱 → 旧令牌 401 → 禁用后登录 401 → 启用 → 角色矩阵返回 3 角色/12 权限 → 审计日志出现 `auth.login.success/failed`、`user.create/update/disable/enable`；创建审计详情不含密码。
+  - 前端：管理员仪表盘接入真实用户/角色/今日操作统计；用户管理页支持搜索、角色/状态筛选、分页、创建、编辑角色与邮箱、重置密码、启禁用；角色权限页展示角色卡片与权限矩阵；审计页以时间线展示操作人、动作、对象、IP、结果与脱敏详情。
 
 ### P1.4 课程体系、邀请码与选课
 
@@ -239,3 +247,4 @@
 |---|---|---|
 | 2026-10-22 | v1.0 | 初始流程落库；16 个小阶段；确认 RAG 适配现有 `/v1` API |
 | 2026-10-23 | v1.1 | 新增学生自助注册（P1.2b）；新增课程邀请码/教师拉人/选课（P1.4）；新增学生个人知识库（P1.6）；原问答/推荐/部署顺延为 P1.7-P1.9，共 18 个小阶段 |
+| 2026-10-23 | v1.2 | 完成 P1.3 管理员治理：用户管理、角色权限矩阵、审计日志与脱敏、最后管理员保护；新增 `audit_logs` 迁移 |
