@@ -5,17 +5,21 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
   Collection,
+  Download,
   Reading,
   UserFilled,
 } from '@element-plus/icons-vue'
 
 import { getCourse } from '@/api/course'
+import { downloadMaterial, listMaterials } from '@/api/material'
+import { fileTypeLabel, formatFileSize } from '@/utils/material'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const course = ref(null)
+const materials = ref([])
 
 function difficultyType(level) {
   if (level <= 2) return 'success'
@@ -29,10 +33,41 @@ async function load() {
   try {
     const body = await getCourse(route.params.id)
     course.value = body?.data || null
+    await loadMaterials()
   } catch (error) {
     ElMessage.error(error?.message || '加载课程详情失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadMaterials() {
+  if (!course.value) return
+  try {
+    const body = await listMaterials({
+      course_id: course.value.id,
+      page_size: 100,
+    })
+    materials.value = body?.data?.items || []
+  } catch {
+    materials.value = []
+  }
+}
+
+async function download(material) {
+  try {
+    const blob = await downloadMaterial(material.id)
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = material.source_filename
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    material.download_count += 1
+  } catch (error) {
+    ElMessage.error(error?.message || '下载资料失败')
   }
 }
 
@@ -95,6 +130,34 @@ onMounted(load)
       </section>
 
       <el-empty v-else description="课程还没有章节内容" :image-size="100" />
+
+      <div class="section-head material-head">
+        <div>
+          <span class="em-eyebrow">MATERIALS</span>
+          <h2>课程资料</h2>
+        </div>
+        <span class="section-note">{{ materials.length }} 份已发布资料</span>
+      </div>
+
+      <section v-if="materials.length" class="material-grid">
+        <article v-for="material in materials" :key="material.id" class="material-card em-card">
+          <span class="file-badge">{{ fileTypeLabel(material.file_type) }}</span>
+          <div class="material-info">
+            <strong>{{ material.title }}</strong>
+            <small>{{ material.source_filename }}</small>
+            <span>{{ formatFileSize(material.file_size) }} · 下载 {{ material.download_count }}</span>
+          </div>
+          <el-button type="primary" plain :icon="Download" @click="download(material)">
+            下载
+          </el-button>
+        </article>
+      </section>
+
+      <el-empty
+        v-else
+        description="课程暂无已发布资料"
+        :image-size="80"
+      />
     </template>
   </div>
 </template>
@@ -258,6 +321,62 @@ onMounted(load)
   font-size: 12px;
 }
 
+.material-head {
+  margin-top: 8px;
+}
+
+.material-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.material-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.file-badge {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--em-primary-soft);
+  color: var(--em-primary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.material-info {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  line-height: 1.35;
+}
+
+.material-info strong {
+  font-size: 14px;
+}
+
+.material-info small {
+  overflow: hidden;
+  color: var(--em-text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-info span {
+  margin-top: 2px;
+  color: var(--em-text-muted);
+  font-size: 10px;
+}
+
 @media (max-width: 760px) {
   .hero {
     flex-direction: column;
@@ -265,6 +384,10 @@ onMounted(load)
 
   .knowledge-list {
     padding-left: 0;
+  }
+
+  .material-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

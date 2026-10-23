@@ -11,11 +11,18 @@ from sqlalchemy.pool import StaticPool
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-with-more-than-32-characters")
 
+from app.core.config import get_settings  # noqa: E402
 from app.db import models  # noqa: E402,F401  (register tables on Base.metadata)
 from app.db.base import Base  # noqa: E402
-from app.db.session import get_db  # noqa: E402
+from app.db.session import get_db, get_session_factory  # noqa: E402
 from app.main import app  # noqa: E402
 from tests.factories import seed_rbac  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def isolated_upload_dir(tmp_path, monkeypatch):
+    """Keep uploaded test files outside the repository."""
+    monkeypatch.setattr(get_settings(), "upload_dir", str(tmp_path / "uploads"))
 
 
 @pytest.fixture
@@ -68,6 +75,7 @@ async def client(session_factory):
             yield session
 
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_session_factory] = lambda: session_factory
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         yield client

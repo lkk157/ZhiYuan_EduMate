@@ -30,6 +30,7 @@ export const ROLE_MENUS = {
     { label: '用户管理', path: '/admin/users', icon: 'User' },
     { label: '角色权限', path: '/admin/roles', icon: 'Key' },
     { label: '课程审核', path: '/admin/reviews', icon: 'DocumentChecked' },
+    { label: '资料审核', path: '/admin/materials', icon: 'Files' },
     { label: '审计日志', path: '/admin/audit', icon: 'Tickets' },
     { label: '系统配置', path: '/admin/settings', icon: 'Setting' },
   ],

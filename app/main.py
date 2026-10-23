@@ -8,12 +8,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.v1 import admin, auth, courses, health
+from app.api.v1 import admin, auth, courses, health, materials
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers, success
 from app.core.logging import configure_logging
 from app.core.middleware import RequestIdMiddleware
 from app.db.session import dispose_engine
+from app.services.rag_client import close_rag_client
 
 settings = get_settings()
 configure_logging(settings.log_level)
@@ -23,6 +24,7 @@ configure_logging(settings.log_level)
 async def lifespan(app: FastAPI):
     settings.upload_path.mkdir(parents=True, exist_ok=True)
     yield
+    await close_rag_client()
     await dispose_engine()
 
 
@@ -49,6 +51,7 @@ app.include_router(health.router, prefix=f"{settings.api_prefix}/health")
 app.include_router(auth.router, prefix=settings.api_prefix)
 app.include_router(admin.router, prefix=settings.api_prefix)
 app.include_router(courses.router, prefix=settings.api_prefix)
+app.include_router(materials.router, prefix=settings.api_prefix)
 
 
 @app.get("/", tags=["meta"])

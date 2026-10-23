@@ -36,6 +36,7 @@ class Course(PkMixin, TimestampMixin, Base):
     teacher_id: Mapped[int] = mapped_column(
         ID_TYPE, ForeignKey("users.id"), nullable=False, index=True
     )
+    rag_group_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     invite_code: Mapped[str] = mapped_column(String(16), unique=True, nullable=False, index=True)
     invite_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     status: Mapped[str] = mapped_column(

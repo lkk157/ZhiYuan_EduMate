@@ -29,7 +29,7 @@
 - JWT 载荷 `sub/ver/role/iat/exp`；角色/密码变更递增 `token_version`。
 - RAG 资料文件名固定 `m{material_id}__{sanitized_original}`；引用解析正则 `^m(\d+)__(.+)$`。
 - RAG 429 按 `Retry-After` 最多重试 1 次；问答超时 300s；失败降级并记录。
-- 后端端口 8001，RAG 8000，MySQL 宿主 3307，Web Docker 8080。
+- 后端端口 8001，RAG 容器 8000 / 本机映射 18000，MySQL 宿主 3307，Web Docker 8080。
 
 ## 常用命令
 

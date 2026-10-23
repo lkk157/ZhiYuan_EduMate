@@ -24,6 +24,11 @@ const ACTION_LABELS = {
   'course.student.add': '添加学生',
   'course.student.remove': '移出学生',
   'course.join': '加入课程',
+  'material.upload': '上传资料',
+  'material.approve': '资料审核通过',
+  'material.reject': '资料审核驳回',
+  'material.index.retry': '重试资料索引',
+  'material.delete': '删除资料',
 }
 
 const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({

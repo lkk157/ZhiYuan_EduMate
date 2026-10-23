@@ -53,8 +53,8 @@ const routes = [
       },
       {
         path: 'materials',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '学习资料', description: '资料浏览与推荐将在 P1.5 / P1.7 接入。' },
+        component: () => import('@/views/student/MaterialsView.vue'),
+        meta: { title: '学习资料' },
       },
       {
         path: 'practice',
@@ -86,8 +86,8 @@ const routes = [
       },
       {
         path: 'materials',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '资料上传', description: '资料上传与 RAG 索引将在 P1.5 接入。' },
+        component: () => import('@/views/teacher/MaterialsView.vue'),
+        meta: { title: '资料上传' },
       },
       {
         path: 'analytics',
@@ -121,6 +121,11 @@ const routes = [
         path: 'reviews',
         component: () => import('@/views/admin/ReviewsView.vue'),
         meta: { title: '课程审核' },
+      },
+      {
+        path: 'materials',
+        component: () => import('@/views/admin/MaterialReviewsView.vue'),
+        meta: { title: '资料审核' },
       },
       {
         path: 'audit',

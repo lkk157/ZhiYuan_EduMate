@@ -31,6 +31,11 @@ ACTION_COURSE_INVITE_TOGGLE = "course.invite.toggle"
 ACTION_COURSE_STUDENT_ADD = "course.student.add"
 ACTION_COURSE_STUDENT_REMOVE = "course.student.remove"
 ACTION_COURSE_JOIN = "course.join"
+ACTION_MATERIAL_UPLOAD = "material.upload"
+ACTION_MATERIAL_APPROVE = "material.approve"
+ACTION_MATERIAL_REJECT = "material.reject"
+ACTION_MATERIAL_INDEX_RETRY = "material.index.retry"
+ACTION_MATERIAL_DELETE = "material.delete"
 
 SENSITIVE_KEYS = {
     "password",

@@ -3,11 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 
 import { fetchAdminStats } from '@/api/admin'
 import { getReadiness } from '@/api/health'
+import { fetchRagHealth } from '@/api/material'
 
 const readiness = ref(null)
 const readinessError = ref('')
 const stats = ref(null)
 const statsError = ref('')
+const ragHealth = ref(null)
 
 const statCards = computed(() => {
   const data = stats.value
@@ -56,9 +58,10 @@ const checkLabels = {
 }
 
 onMounted(async () => {
-  const [readinessResult, statsResult] = await Promise.allSettled([
+  const [readinessResult, statsResult, ragResult] = await Promise.allSettled([
     getReadiness(),
     fetchAdminStats(),
+    fetchRagHealth(),
   ])
 
   if (readinessResult.status === 'fulfilled') {
@@ -72,6 +75,11 @@ onMounted(async () => {
   } else {
     statsError.value = '统计加载失败'
   }
+
+  ragHealth.value =
+    ragResult.status === 'fulfilled'
+      ? ragResult.value?.data || null
+      : { status: 'unreachable', error: 'RAG 服务不可用' }
 })
 </script>
 
@@ -144,7 +152,12 @@ onMounted(async () => {
           </div>
           <div class="health-row">
             <span>RAG 服务</span>
-            <span class="health-value muted">P1.5 接入</span>
+            <span
+              class="health-value"
+              :class="ragHealth?.status === 'ok' ? 'ok' : 'error'"
+            >
+              {{ ragHealth ? (ragHealth.status === 'ok' ? 'ok' : ragHealth.status) : 'checking' }}
+            </span>
           </div>
         </div>
 

@@ -31,6 +31,14 @@ async def get_db() -> AsyncIterator[AsyncSession]:
         yield session
 
 
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """Session factory dependency used by background tasks.
+
+    Tests override it so background indexing writes to the isolated SQLite DB.
+    """
+    return AsyncSessionLocal
+
+
 async def check_database() -> None:
     """Raise if the database is not reachable."""
     async with engine.connect() as conn:

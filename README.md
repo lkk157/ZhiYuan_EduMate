@@ -5,7 +5,7 @@
 - **EduMate 主服务**：用户/权限、课程体系、资料元数据、问答记录、推荐、学情与治理。
 - **知源 RAG 服务**（已有，独立部署）：文档解析、向量检索与 LLM 生成，通过 `/v1` HTTP API 接入。
 
-> 当前进度：**P1.4 课程体系、审核、邀请码与选课已完成**。学生可自助注册、教师建课并提交审核、管理员审核、学生凭邀请码或教师添加加入课程。下一步 P1.5 课程资料上传、审核与 RAG 索引；学生个人知识库安排在 P1.6。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
+> 当前进度：**P1.5 课程资料上传、审核与真实 RAG 索引已完成**。资料支持 PDF/DOCX/PPTX/图片，管理员审核通过后自动索引到课程对应的 RAG 分组，失败可重试；学生仅能看到已选课程中已审核通过的资料。下一步 P1.6 学生个人知识库。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
 
 ## 技术栈
 
@@ -101,10 +101,19 @@ RAG 项目位于 `D:\python\ClaudeProject\ZhiYuan_EduMind`，EduMate **不修改
 ```bash
 cd D:/python/ClaudeProject/ZhiYuan_EduMind
 docker compose up -d api
-# 等待 http://127.0.0.1:8000/healthz 返回 {"status":"ok"}
+# 本机 compose 将容器 8000 映射到宿主 18000：
+# 等待 http://127.0.0.1:18000/healthz 返回 {"status":"ok"}
 ```
 
-EduMate 使用 `X-API-Key` 鉴权；服务账号与 Key 通过 `scripts/register_rag_key.py` 注册，写入本地 `.env`，不会提交仓库。
+EduMate 使用 `X-API-Key` 鉴权。首次接入时运行：
+
+```bash
+.venv/Scripts/python.exe scripts/register_rag_key.py --base-url http://127.0.0.1:18000
+```
+
+脚本会注册 `edumate_service` 账号、签发 API Key，并只写入本地 `.env`（已 gitignore），不会提交仓库。
+
+示例资料位于 `samples/`，可通过 `scripts/generate_samples.py` 重新生成。
 
 ## 端口约定
 
@@ -112,7 +121,7 @@ EduMate 使用 `X-API-Key` 鉴权；服务账号与 Key 通过 `scripts/register
 |---|---|
 | EduMate API | 8001 |
 | Vite 开发服务器 | 5173 |
-| RAG API | 8000 |
+| RAG API | 18000（容器内 8000） |
 | MySQL | 3307（容器内 3306） |
 | Redis | 6379 |
 | Docker Web（阶段一末） | 8080 |
