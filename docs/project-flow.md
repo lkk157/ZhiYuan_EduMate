@@ -39,7 +39,7 @@
 | P1.2b | 学生自助注册 | 已完成 | `a37c2f3` · `feat(auth): student self-registration` |
 | P1.3 | 管理员治理：用户、角色、审计 | 已完成 | `0c2110e` · `feat(admin): user, role and audit management` |
 | P1.4 | 课程体系、邀请码与选课 | 已完成 | `e4f6464` · `feat(course): course hierarchy, review and enrollment via invite code` |
-| P1.5 | 课程资料上传、审核与 RAG 索引 | 待开始 | — |
+| P1.5 | 课程资料上传、审核与 RAG 索引 | 已完成 | `6e9c96b` · `feat(material): upload, review and real RAG indexing` |
 | P1.6 | 学生个人知识库与资料索引 | 待开始 | — |
 | P1.7 | 问答、引用与问答记录（课程/个人库） | 待开始 | — |
 | P1.8 | 基础推荐与学生首页（已选课程） | 待开始 | — |
@@ -149,7 +149,22 @@
 - **前端**：教师资料上传/列表/状态/重试；管理员资料审核。
 - **测试**：类型/大小/路径穿越；分组幂等；审核→索引状态机；RAG 成功/失败/429/超时；引用前缀；软删除；未选学生 403。
 - **联调**：启动 RAG 容器、注册账号/API Key，上传示例 docx 并确认 `indexed`。
-- **提交**：`feat(material): course material upload, review and RAG indexing`
+- **提交**：`feat(material): upload, review and real RAG indexing`
+- **验收记录（2026-10-23，提交 `6e9c96b`）**：
+  - 后端 `pytest -q`：**67 passed**；`ruff check app tests` / `ruff format --check app tests`：通过。
+  - 前端 `npm run test:unit -- --run`：**15 个测试文件 / 27 个测试通过**；`npm run build`：成功。
+  - 数据库：新增 `materials` 表与 `courses.rag_group_id` 字段，迁移 `c3d4e5f6a7b8` 已在 MySQL 与 SQLite 测试库验证。
+  - RAG 接入：本机 RAG 服务实际映射端口 **18000**；通过 `scripts/register_rag_key.py` 注册 `edumate_service` 账号并签发 API Key，Key 仅写入本地 `.env`（已 gitignore）。`GET /materials/rag-health` 返回 `status=ok / reachable=true / auth_ok=true`。
+  - 新增接口：`GET/POST /materials`、`GET /materials/{id}`、`GET /materials/{id}/download`、`POST /materials/{id}/review`、`POST /materials/{id}/index/retry`、`DELETE /materials/{id}`、`GET /materials/rag-health`。
+  - 上传：PDF/DOCX/PPTX/PNG/JPG/JPEG，单文件 ≤200MB，文件名清洗，磁盘按 `courses/{course_id}/m{material_id}__{filename}` 存储；非课程教师/学生/未发布课程均被拒绝。
+  - 索引状态机：上传 `pending` → 管理员通过触发后台索引 `indexing` → `indexed` / `failed`；失败记录 `index_error` 并可由教师重试；索引文件名固定 `m<material_id>__` 前缀，供后续引用回映射。
+  - RAG 分组：首次索引按 `edumate-course-{course_id}` 懒创建并持久化 `rag_group_id`；同课程后续资料复用同一分组。
+  - 权限：教师仅管理自己课程资料；学生仅能访问已加入且已发布课程中 `approved` 的资料；学生详情不返回 `rag_filename/vector_doc_id/index_error`；软删除后所有角色不可访问文件（向量暂不删除，受 RAG `/v1` 无删除接口限制）。
+  - 审计：`material.upload/approve/reject/index.retry/delete` 写入审计。
+  - 真实联调：使用 `samples/机器学习基础.docx`（37KB）上传 → 管理员通过 → 后台索引 → `indexed`，RAG 分组 `edumate-course-1`（id=12）文档数 1，`vector_doc_id=75`；学生列表可见并成功下载原始文件。另验证驳回资料对学生不可见、软删除后学生不可下载。
+  - 前端：教师资料页（课程/审核/索引筛选、上传弹窗、索引状态轮询、失败重试、下载、删除、RAG 健康提示）；管理员资料审核页；学生“学习资料”页与课程详情资料区；管理员导航新增“资料审核”，仪表盘显示真实 RAG 健康状态。
+
+> 说明：RAG `/v1` 无文档删除接口，软删除只影响 EduMate 业务可见性，向量仍保留；`samples/` 下示例 docx 与生成脚本已提交。真实联调在本地演示库留下课程 1 的已索引资料「机器学习基础讲义」，以及一条已软删除的驳回示例资料。
 
 ### P1.6 学生个人知识库与资料索引
 
@@ -262,3 +277,4 @@
 | 2026-10-23 | v1.1 | 新增学生自助注册（P1.2b）；新增课程邀请码/教师拉人/选课（P1.4）；新增学生个人知识库（P1.6）；原问答/推荐/部署顺延为 P1.7-P1.9，共 18 个小阶段 |
 | 2026-10-23 | v1.2 | 完成 P1.3 管理员治理：用户管理、角色权限矩阵、审计日志与脱敏、最后管理员保护；新增 `audit_logs` 迁移 |
 | 2026-10-23 | v1.3 | 完成 P1.4 课程体系、审核流、邀请码与选课；新增课程/章节/知识点/选课表与课程审计动作；已发布课程结构锁定 |
+| 2026-10-23 | v1.4 | 完成 P1.5 资料上传、审核与真实 RAG 索引；新增 materials 表、课程 rag_group_id、RAG 客户端与健康检查；RAG 本机端口确认为 18000 |

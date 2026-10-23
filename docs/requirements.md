@@ -45,6 +45,8 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 | 流式问答 | `POST /v1/rag/ask/stream` | SSE `delta/done/error` |
 | 健康 | `GET /healthz` | 免鉴权，仅存活探针 |
 
+> 本机部署现状：RAG 容器内端口 8000，Docker Compose 映射到宿主 **18000**；EduMate 的 `RAG_BASE_URL` 指向实际映射端口。
+
 限制：
 
 - 同一时刻只处理 1 个推理请求；排队超时返回 429（`Retry-After`）。
