@@ -8,6 +8,7 @@ from app.db.models.audit import AuditLog
 from app.db.models.course import Chapter, Course, CourseEnrollment, Knowledge
 from app.db.models.knowledge_base import KnowledgeBase
 from app.db.models.material import Material
+from app.db.models.qa import QARecord
 from app.db.models.rbac import Permission, Role, User, role_permissions
 
 __all__ = [
@@ -19,6 +20,7 @@ __all__ = [
     "KnowledgeBase",
     "Material",
     "Permission",
+    "QARecord",
     "Role",
     "User",
     "role_permissions",

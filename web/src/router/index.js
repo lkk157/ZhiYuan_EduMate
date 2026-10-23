@@ -43,13 +43,13 @@ const routes = [
       },
       {
         path: 'qa',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: 'AI 学伴问答', description: '带引用的 RAG 问答将在 P1.6 接入。' },
+        component: () => import('@/views/student/QaView.vue'),
+        meta: { title: 'AI 学伴问答' },
       },
       {
         path: 'qa-history',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '问答记录', description: '问答历史将在 P1.6 接入。' },
+        component: () => import('@/views/student/QaHistoryView.vue'),
+        meta: { title: '问答记录' },
       },
       {
         path: 'materials',

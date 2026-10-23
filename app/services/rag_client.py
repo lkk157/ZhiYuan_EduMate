@@ -193,6 +193,33 @@ class RagClient:
         data = response.json()
         return data if isinstance(data, list) else []
 
+    async def ask(
+        self,
+        question: str,
+        *,
+        group_ids: list[int] | None = None,
+        guide_mode: bool = False,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"question": question, "guide_mode": guide_mode}
+        if group_ids:
+            payload["group_ids"] = group_ids
+        response = await self._request(
+            "POST",
+            "/v1/rag/ask",
+            json=payload,
+            # Q&A failures degrade immediately; only 429 is retried once.
+            retry_server_errors=False,
+        )
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise RagError("RAG 返回格式异常") from exc
+        if not isinstance(data, dict) or "answer" not in data:
+            raise RagError("RAG 返回格式异常")
+        data.setdefault("sources", [])
+        data.setdefault("hit", False)
+        return data
+
     async def ensure_group(self, name: str) -> int:
         response = await self._request(
             "POST",

@@ -180,6 +180,64 @@ async def test_health_reports_reachable_and_auth_status():
     assert health["latency_ms"] >= 0
 
 
+async def test_ask_returns_answer_and_sources():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["body"] = request.content.decode()
+        return httpx.Response(
+            200,
+            json={
+                "answer": "监督学习使用带标签的数据。",
+                "sources": [
+                    {
+                        "file_name": "m1__notes.pdf",
+                        "page_no": 2,
+                        "snippet": "监督学习",
+                        "score": 0.9,
+                    }
+                ],
+                "hit": True,
+                "intent": "qa",
+                "scope_note": None,
+            },
+        )
+
+    client = await make_client(handler)
+    try:
+        result = await client.ask("什么是监督学习？", group_ids=[11, 22])
+    finally:
+        await client.aclose()
+
+    assert result["hit"] is True
+    assert result["answer"].startswith("监督学习")
+    assert seen["path"] == "/v1/rag/ask"
+    assert '"group_ids":[11,22]' in seen["body"]
+
+
+async def test_ask_does_not_retry_server_errors(monkeypatch):
+    attempts = {"count": 0}
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr("app.services.rag_client.asyncio.sleep", no_sleep)
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        attempts["count"] += 1
+        return httpx.Response(502, json={"error": {"code": 502, "message": "upstream"}})
+
+    client = await make_client(handler)
+    try:
+        with pytest.raises(RagError, match="暂时不可用"):
+            await client.ask("问题", group_ids=[1])
+    finally:
+        await client.aclose()
+
+    assert attempts["count"] == 1
+
+
 async def test_missing_api_key_is_rejected():
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json=[])
