@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -17,7 +20,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.deps import get_current_user, require_permission
-from app.core.errors import NotFoundError, success
+from app.core.config import get_settings
+from app.core.errors import AppError, NotFoundError, ValidationError, success
 from app.db.models.material import ALLOWED_MATERIAL_SUFFIXES, INDEX_STATUSES, MATERIAL_STATUSES
 from app.db.models.rbac import ROLE_ADMIN, ROLE_TEACHER, User
 from app.db.session import get_db, get_session_factory
@@ -26,6 +30,8 @@ from app.services import course_service, material_service
 from app.services.audit_service import client_ip
 from app.services.material_service import index_material
 from app.services.rag_client import RagClient, get_rag_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 
@@ -106,6 +112,131 @@ async def upload_material(
         ip=client_ip(request),
     )
     return success(material_list_out(material, management=True), "资料已上传，等待管理员审核")
+
+
+@router.post("/batch", status_code=status.HTTP_201_CREATED)
+async def upload_materials_batch(
+    request: Request,
+    course_id: int = Form(...),
+    files: list[UploadFile] = File(...),
+    title: str | None = Form(default=None),
+    chapter_id: int | None = Form(default=None),
+    knowledge_id: int | None = Form(default=None),
+    user: User = Depends(require_permission("material:upload")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    if not files:
+        raise ValidationError("请选择要上传的资料文件")
+    if len(files) > material_service.MAX_BATCH_FILES:
+        raise ValidationError(f"单次最多上传 {material_service.MAX_BATCH_FILES} 个文件")
+
+    settings = get_settings()
+    invalid_type = [
+        upload.filename or ""
+        for upload in files
+        if Path(upload.filename or "").suffix.lower() not in ALLOWED_MATERIAL_SUFFIXES
+    ]
+    if invalid_type:
+        raise ValidationError(
+            "部分文件类型不支持",
+            data={
+                "errors": [
+                    {"filename": name, "message": "不支持的文件类型"} for name in invalid_type
+                ]
+            },
+        )
+    too_large = [
+        upload.filename or ""
+        for upload in files
+        if int(getattr(upload, "size", 0) or 0) > settings.max_upload_bytes
+    ]
+    if too_large:
+        raise ValidationError(
+            f"单个文件不能超过 {settings.max_upload_mb}MB",
+            data={
+                "errors": [{"filename": name, "message": "文件超过大小限制"} for name in too_large]
+            },
+        )
+
+    course = await course_service.get_accessible_course(db, user, course_id, for_management=True)
+    if chapter_id is not None:
+        chapter = next((item for item in course.chapters if item.id == chapter_id), None)
+        if chapter is None:
+            raise ValidationError("章节不属于该课程")
+        if knowledge_id is not None and not any(
+            item.id == knowledge_id for item in chapter.knowledges
+        ):
+            raise ValidationError("知识点不属于所选章节")
+    elif knowledge_id is not None:
+        raise ValidationError("选择知识点前请先选择章节")
+
+    shared_title = title.strip() if title and title.strip() else None
+    items = []
+    errors = []
+    for index, upload in enumerate(files):
+        filename = upload.filename or ""
+        try:
+            material = await material_service.create_material(
+                db,
+                course=course,
+                uploader=user,
+                upload=upload,
+                # A shared title would be ambiguous for a batch; each file
+                # falls back to its own filename in that case.
+                title=shared_title if len(files) == 1 else None,
+                chapter_id=chapter_id,
+                knowledge_id=knowledge_id,
+                ip=client_ip(request),
+            )
+            items.append(material_list_out(material, management=True))
+        except AppError as exc:
+            await db.rollback()
+            errors.append({"filename": filename, "code": exc.code, "message": exc.message})
+            # The rollback expires ORM instances; stop rather than reuse them.
+            for rest in files[index + 1 :]:
+                errors.append(
+                    {
+                        "filename": rest.filename or "",
+                        "code": exc.code,
+                        "message": "前一个文件失败，未处理",
+                    }
+                )
+                await rest.close()
+            break
+        except Exception:  # noqa: BLE001 - record and stop the batch safely
+            await db.rollback()
+            logger.exception("batch material upload failed: %s", filename)
+            errors.append({"filename": filename, "code": 5000, "message": "上传失败，请重试"})
+            for rest in files[index + 1 :]:
+                errors.append(
+                    {
+                        "filename": rest.filename or "",
+                        "code": 5000,
+                        "message": "前一个文件失败，未处理",
+                    }
+                )
+                await rest.close()
+            break
+        finally:
+            await upload.close()
+
+    if not items:
+        message = errors[0]["message"] if errors else "资料上传失败"
+        raise ValidationError(message, data={"errors": errors})
+
+    if errors:
+        message = f"成功上传 {len(items)} 个资料，{len(errors)} 个失败"
+    else:
+        message = f"成功上传 {len(items)} 个资料，等待管理员审核"
+    return success(
+        {
+            "items": items,
+            "succeeded": len(items),
+            "failed": len(errors),
+            "errors": errors,
+        },
+        message,
+    )
 
 
 @router.get("/{material_id}")

@@ -59,6 +59,7 @@ MATERIAL_LOAD = (
 )
 
 CHUNK_SIZE = 1024 * 1024
+MAX_BATCH_FILES = 10
 
 
 def sanitize_filename(filename: str, fallback: str = "material") -> str:

@@ -12,6 +12,7 @@ vi.mock('@/api/material', () => ({
   listMaterials: vi.fn(),
   getMaterial: vi.fn(),
   uploadMaterial: vi.fn(),
+  uploadMaterialsBatch: vi.fn(),
   reviewMaterial: vi.fn(),
   retryMaterialIndex: vi.fn(),
   deleteMaterial: vi.fn(),

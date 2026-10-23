@@ -18,7 +18,7 @@ import {
   fetchRagHealth,
   listMaterials,
   retryMaterialIndex,
-  uploadMaterial,
+  uploadMaterialsBatch,
 } from '@/api/material'
 import { formatDateTime } from '@/utils/format'
 import {
@@ -52,7 +52,6 @@ const uploadForm = reactive({
   courseId: '',
   title: '',
   chapterId: null,
-  file: null,
 })
 
 const statusOptions = [
@@ -142,7 +141,6 @@ async function openUpload() {
     courseId: courses.value.length === 1 ? courses.value[0].id : '',
     title: '',
     chapterId: null,
-    file: null,
   })
   fileList.value = []
   chapterOptions.value = []
@@ -170,15 +168,18 @@ async function onCourseChange(value) {
   await loadChapters(value)
 }
 
-function onFileChange(uploadFile) {
-  uploadForm.file = uploadFile.raw || null
-  if (uploadForm.file && !uploadForm.title) {
-    uploadForm.title = uploadForm.file.name.replace(/\.[^.]+$/, '')
+function onFileChange(uploadFile, uploadFiles) {
+  const files = uploadFiles || []
+  if (files.length === 1) {
+    const name = uploadFile.name || uploadFile.raw?.name || ''
+    if (!uploadForm.title) uploadForm.title = name.replace(/\.[^.]+$/, '')
+  } else {
+    uploadForm.title = ''
   }
 }
 
-function onFileRemove() {
-  uploadForm.file = null
+function onFileRemove(_file, uploadFiles) {
+  if (!(uploadFiles || []).length) uploadForm.title = ''
 }
 
 async function submitUpload() {
@@ -186,17 +187,29 @@ async function submitUpload() {
     ElMessage.warning('请选择课程')
     return
   }
-  if (!uploadForm.file) {
+  const files = fileList.value.map((item) => item.raw).filter(Boolean)
+  if (!files.length) {
     ElMessage.warning('请选择要上传的资料文件')
     return
   }
   uploading.value = true
   try {
-    await uploadMaterial(uploadForm.courseId, uploadForm.file, {
+    const body = await uploadMaterialsBatch(uploadForm.courseId, files, {
       title: uploadForm.title.trim(),
       chapterId: uploadForm.chapterId,
     })
-    ElMessage.success('资料已上传，等待管理员审核')
+    const result = body?.data || {}
+    if (result.failed) {
+      const names = (result.errors || [])
+        .map((item) => item.filename)
+        .filter(Boolean)
+        .join('、')
+      ElMessage.warning(
+        `${body.message || '部分文件上传失败'}${names ? `：${names}` : ''}`,
+      )
+    } else {
+      ElMessage.success(body.message || `成功上传 ${result.succeeded} 个资料`)
+    }
     uploadVisible.value = false
     page.value = 1
     await loadMaterials()
@@ -409,7 +422,7 @@ onUnmounted(() => {
       </div>
     </section>
 
-    <el-dialog v-model="uploadVisible" title="上传课程资料" width="560px">
+    <el-dialog v-model="uploadVisible" title="上传课程资料（支持批量）" width="560px">
       <el-form label-position="top">
         <el-form-item label="所属课程" required>
           <el-select v-model="uploadForm.courseId" class="full-width" placeholder="选择已发布课程" @change="onCourseChange">
@@ -417,8 +430,13 @@ onUnmounted(() => {
           </el-select>
           <p v-if="!courses.length" class="form-hint">暂无可上传资料的已发布课程</p>
         </el-form-item>
-        <el-form-item label="资料标题">
-          <el-input v-model="uploadForm.title" placeholder="默认使用文件名" maxlength="200" />
+        <el-form-item label="资料标题（单文件时生效）">
+          <el-input
+            v-model="uploadForm.title"
+            placeholder="单文件可自定义标题；多文件自动使用文件名"
+            maxlength="200"
+            :disabled="fileList.length > 1"
+          />
         </el-form-item>
         <el-form-item label="关联章节（选填）">
           <el-select
@@ -440,27 +458,32 @@ onUnmounted(() => {
           <el-upload
             v-model:file-list="fileList"
             drag
+            multiple
             class="uploader"
             accept=".pdf,.docx,.pptx,.png,.jpg,.jpeg"
             :auto-upload="false"
-            :limit="1"
+            :limit="10"
             :on-change="onFileChange"
             :on-remove="onFileRemove"
           >
             <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="el-upload__text">拖拽文件到这里，或 <em>点击选择</em></div>
+            <div class="el-upload__text">拖拽文件到这里，或 <em>点击选择（可多选）</em></div>
             <template #tip>
               <div class="el-upload__tip">
-                支持 PDF / DOCX / PPTX / PNG / JPG / JPEG，单个文件不超过 200MB。
+                一次最多 10 个文件，单个不超过 200MB；支持 PDF / DOCX / PPTX / PNG / JPG / JPEG。多文件时自动使用文件名作为标题。
               </div>
             </template>
           </el-upload>
         </el-form-item>
       </el-form>
-      <p class="dialog-hint">上传后进入管理员审核；审核通过后自动后台索引到课程知识库。</p>
+      <p class="dialog-hint">
+        批量上传会逐个保存并提交审核；部分文件失败不会影响已成功的文件。审核通过后自动后台索引到课程知识库。
+      </p>
       <template #footer>
         <el-button @click="uploadVisible = false">取消</el-button>
-        <el-button type="primary" :loading="uploading" @click="submitUpload">上传并提交审核</el-button>
+        <el-button type="primary" :loading="uploading" @click="submitUpload">
+          {{ fileList.length ? `上传 ${fileList.length} 个资料并提交审核` : '上传并提交审核' }}
+        </el-button>
       </template>
     </el-dialog>
   </div>

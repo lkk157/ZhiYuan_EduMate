@@ -18,6 +18,16 @@ export function uploadMaterial(courseId, file, options = {}) {
   return http.post('/materials', form)
 }
 
+export function uploadMaterialsBatch(courseId, files, options = {}) {
+  const form = new FormData()
+  form.append('course_id', String(courseId))
+  files.forEach((file) => form.append('files', file))
+  if (options.title) form.append('title', options.title)
+  if (options.chapterId) form.append('chapter_id', String(options.chapterId))
+  if (options.knowledgeId) form.append('knowledge_id', String(options.knowledgeId))
+  return http.post('/materials/batch', form)
+}
+
 export function reviewMaterial(materialId, payload) {
   return http.post(`/materials/${materialId}/review`, payload)
 }

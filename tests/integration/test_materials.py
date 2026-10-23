@@ -153,6 +153,30 @@ async def upload_material(
     )
 
 
+async def upload_batch(
+    client,
+    headers,
+    course_id: int,
+    filenames: list[str],
+    *,
+    chapter_id: int | None = None,
+    title: str | None = None,
+    content: bytes = b"%PDF-1.4 batch content",
+):
+    data = {"course_id": str(course_id)}
+    if chapter_id is not None:
+        data["chapter_id"] = str(chapter_id)
+    if title is not None:
+        data["title"] = title
+    files = []
+    for name in filenames:
+        content_type = (
+            "application/pdf" if name.lower().endswith(".pdf") else "application/octet-stream"
+        )
+        files.append(("files", (name, content, content_type)))
+    return await client.post("/api/v1/materials/batch", headers=headers, data=data, files=files)
+
+
 async def wait_for_index(client, headers, material_id: int, timeout: float = 3.0):
     deadline = asyncio.get_running_loop().time() + timeout
     response = None
@@ -482,3 +506,68 @@ async def test_material_access_guards_and_rag_health(client, seeded, fake_rag):
     assert health.status_code == 200
     assert health.json()["data"]["status"] == "ok"
     assert health.json()["data"]["auth_ok"] is True
+
+
+async def test_batch_upload_creates_multiple_materials(client, seeded):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    student = await auth_headers(client, "student", seeded["password"])
+    course, chapter_id, _ = await build_approved_course(client, teacher, admin, "批量上传课程")
+
+    batch = await upload_batch(
+        client,
+        teacher,
+        course["id"],
+        ["lesson-1.pdf", "lesson-2.pdf", "lesson-3.pdf"],
+        chapter_id=chapter_id,
+    )
+    assert batch.status_code == 201, batch.text
+    data = batch.json()["data"]
+    assert data["succeeded"] == 3
+    assert data["failed"] == 0
+    assert len(data["items"]) == 3
+    assert {item["title"] for item in data["items"]} == {
+        "lesson-1",
+        "lesson-2",
+        "lesson-3",
+    }
+    assert all(item["status"] == "pending" for item in data["items"])
+    assert all(item["chapter_id"] == chapter_id for item in data["items"])
+    assert len({item["rag_filename"] for item in data["items"]}) == 3
+
+    listed = await client.get(f"/api/v1/materials?course_id={course['id']}", headers=teacher)
+    assert listed.json()["data"]["total"] == 3
+
+    logs = await client.get(
+        "/api/v1/admin/audit-logs?action=material.upload&page_size=100", headers=admin
+    )
+    assert logs.json()["data"]["total"] == 3
+
+    student_batch = await upload_batch(client, student, course["id"], ["student-1.pdf"])
+    assert student_batch.status_code == 403
+
+
+async def test_batch_upload_rejects_invalid_type_and_too_many_files(client, seeded):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    course, _, _ = await build_approved_course(client, teacher, admin, "批量校验课程")
+
+    invalid = await upload_batch(client, teacher, course["id"], ["good.pdf", "bad.exe"])
+    assert invalid.status_code == 422
+    assert invalid.json()["code"] == 1001
+    errors = invalid.json()["data"]["errors"]
+    assert errors == [{"filename": "bad.exe", "message": "不支持的文件类型"}]
+
+    listed = await client.get(f"/api/v1/materials?course_id={course['id']}", headers=teacher)
+    assert listed.json()["data"]["total"] == 0
+
+    too_many = await upload_batch(
+        client, teacher, course["id"], [f"file-{index}.pdf" for index in range(11)]
+    )
+    assert too_many.status_code == 422
+
+    empty_title_batch = await upload_batch(
+        client, teacher, course["id"], ["single.pdf"], title="批量单文件标题"
+    )
+    assert empty_title_batch.status_code == 201
+    assert empty_title_batch.json()["data"]["items"][0]["title"] == "批量单文件标题"
