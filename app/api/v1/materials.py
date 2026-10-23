@@ -312,6 +312,21 @@ async def delete_material(
     return success({"deleted": True, "material_id": material_id}, "资料已删除")
 
 
+@router.post("/{material_id}/view")
+async def view_material(
+    material_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    material = await material_service.get_material(db, material_id)
+    await material_service.ensure_material_access(db, material, user)
+    view_count = await material_service.register_view(db, material, user)
+    return success(
+        {"material_id": material_id, "view_count": view_count},
+        "已记录浏览",
+    )
+
+
 @router.get("/{material_id}/download")
 async def download_material(
     material_id: int,
@@ -323,7 +338,7 @@ async def download_material(
     path = material_service.material_absolute_path(material)
     if not path.exists():
         raise NotFoundError("资料文件不存在")
-    await material_service.register_download(db, material)
+    await material_service.register_download(db, material, user)
     return FileResponse(
         path=path,
         filename=material.source_filename,

@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import ID_TYPE, Base, PkMixin, TimestampMixin
+from app.db.base import ID_TYPE, Base, PkMixin, TimestampMixin, utc_now
 
 MATERIAL_STATUS_PENDING = "pending"
 MATERIAL_STATUS_APPROVED = "approved"
@@ -116,3 +116,28 @@ class Material(PkMixin, TimestampMixin, Base):
     knowledge = relationship("Knowledge", lazy="selectin")
     uploader = relationship("User", foreign_keys=[uploader_id], lazy="selectin")
     reviewed_by = relationship("User", foreign_keys=[reviewed_by_id], lazy="selectin")
+
+
+class MaterialView(PkMixin, Base):
+    """Latest time a student opened a material.
+
+    One row per (student, material) pair keeps the table bounded while still
+    giving home recommendations a stable "most recently browsed" seed.
+    """
+
+    __tablename__ = "material_views"
+    __table_args__ = (
+        UniqueConstraint("user_id", "material_id", name="uq_material_view_user_material"),
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ID_TYPE, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    material_id: Mapped[int] = mapped_column(
+        ID_TYPE, ForeignKey("materials.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    viewed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now, nullable=False, index=True
+    )
+
+    material = relationship("Material", lazy="selectin")

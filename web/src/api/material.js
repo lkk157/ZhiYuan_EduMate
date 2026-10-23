@@ -44,6 +44,10 @@ export function downloadMaterial(materialId) {
   return http.get(`/materials/${materialId}/download`, { responseType: 'blob' })
 }
 
+export function markMaterialViewed(materialId) {
+  return http.post(`/materials/${materialId}/view`)
+}
+
 export function fetchRagHealth() {
   return http.get('/materials/rag-health')
 }

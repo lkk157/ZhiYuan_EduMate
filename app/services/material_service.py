@@ -41,6 +41,7 @@ from app.db.models.material import (
     MATERIAL_STATUS_PENDING,
     MATERIAL_STATUS_REJECTED,
     Material,
+    MaterialView,
 )
 from app.db.models.rbac import ROLE_ADMIN, ROLE_STUDENT, ROLE_TEACHER, User
 from app.services.audit_service import (
@@ -417,8 +418,34 @@ async def soft_delete_material(
     await db.commit()
 
 
-async def register_download(db: AsyncSession, material: Material) -> None:
+async def _touch_material_view(db: AsyncSession, user: User, material: Material) -> None:
+    """Record the latest time this user opened the material."""
+    view = await db.scalar(
+        select(MaterialView).where(
+            MaterialView.user_id == user.id,
+            MaterialView.material_id == material.id,
+        )
+    )
+    if view is None:
+        db.add(MaterialView(user_id=user.id, material_id=material.id))
+    else:
+        view.viewed_at = utc_now()
+
+
+async def register_view(
+    db: AsyncSession, material: Material, user: User, *, increment: bool = True
+) -> int:
+    if increment:
+        material.view_count += 1
+    await _touch_material_view(db, user, material)
+    await db.commit()
+    return material.view_count
+
+
+async def register_download(db: AsyncSession, material: Material, user: User | None = None) -> None:
     material.download_count += 1
+    if user is not None:
+        await _touch_material_view(db, user, material)
     await db.commit()
 
 

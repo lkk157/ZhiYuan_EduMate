@@ -8,7 +8,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.v1 import admin, auth, courses, health, knowledge_bases, materials, qa
+from app.api.v1 import (
+    admin,
+    auth,
+    courses,
+    health,
+    knowledge_bases,
+    materials,
+    qa,
+    recommend,
+)
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers, success
 from app.core.logging import configure_logging
@@ -54,6 +63,7 @@ app.include_router(courses.router, prefix=settings.api_prefix)
 app.include_router(materials.router, prefix=settings.api_prefix)
 app.include_router(knowledge_bases.router, prefix=settings.api_prefix)
 app.include_router(qa.router, prefix=settings.api_prefix)
+app.include_router(recommend.router, prefix=settings.api_prefix)
 
 
 @app.get("/", tags=["meta"])
