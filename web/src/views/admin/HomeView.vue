@@ -1,17 +1,47 @@
 <script setup>
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 
+import { fetchAdminStats } from '@/api/admin'
 import { getReadiness } from '@/api/health'
 
 const readiness = ref(null)
 const readinessError = ref('')
+const stats = ref(null)
+const statsError = ref('')
 
-const stats = [
-  { label: '用户总数', value: '—', hint: 'P1.3 接入', icon: 'User', tone: 'blue' },
-  { label: '待审核课程', value: '—', hint: 'P1.4 接入', icon: 'Document', tone: 'orange' },
-  { label: '待审核资料', value: '—', hint: 'P1.5 接入', icon: 'Files', tone: 'green' },
-  { label: '今日操作', value: '—', hint: 'P1.3 接入', icon: 'Tickets', tone: 'purple' },
-]
+const statCards = computed(() => {
+  const data = stats.value
+  return [
+    {
+      label: '用户总数',
+      value: data?.total_users ?? '—',
+      hint: statsError.value || '学生、教师与管理员',
+      icon: 'User',
+      tone: 'blue',
+    },
+    {
+      label: '启用账号',
+      value: data?.active_users ?? '—',
+      hint: '当前可正常登录',
+      icon: 'CircleCheck',
+      tone: 'green',
+    },
+    {
+      label: '教师数量',
+      value: data?.role_counts?.teacher ?? '—',
+      hint: '课程创建者',
+      icon: 'Reading',
+      tone: 'orange',
+    },
+    {
+      label: '今日操作',
+      value: data?.today_audits ?? '—',
+      hint: '审计日志记录',
+      icon: 'Tickets',
+      tone: 'purple',
+    },
+  ]
+})
 
 const shortcuts = [
   { title: '用户管理', text: '账号、角色与状态', path: '/admin/users', icon: 'User' },
@@ -26,11 +56,21 @@ const checkLabels = {
 }
 
 onMounted(async () => {
-  try {
-    const body = await getReadiness()
-    readiness.value = body?.data || null
-  } catch (error) {
-    readinessError.value = error?.message || '无法获取服务状态'
+  const [readinessResult, statsResult] = await Promise.allSettled([
+    getReadiness(),
+    fetchAdminStats(),
+  ])
+
+  if (readinessResult.status === 'fulfilled') {
+    readiness.value = readinessResult.value?.data || null
+  } else {
+    readinessError.value = readinessResult.reason?.message || '无法获取服务状态'
+  }
+
+  if (statsResult.status === 'fulfilled') {
+    stats.value = statsResult.value?.data || null
+  } else {
+    statsError.value = '统计加载失败'
   }
 })
 </script>
@@ -55,7 +95,7 @@ onMounted(async () => {
     </section>
 
     <section class="stat-grid">
-      <article v-for="item in stats" :key="item.label" class="stat-card em-card">
+      <article v-for="item in statCards" :key="item.label" class="stat-card em-card">
         <div class="stat-icon" :class="`tone-${item.tone}`">
           <el-icon><component :is="item.icon" /></el-icon>
         </div>

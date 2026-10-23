@@ -99,13 +99,13 @@ const routes = [
       },
       {
         path: 'users',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '用户管理', description: '用户与角色管理将在 P1.3 接入。' },
+        component: () => import('@/views/admin/UsersView.vue'),
+        meta: { title: '用户管理' },
       },
       {
         path: 'roles',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '角色权限', description: '角色权限将在 P1.3 接入。' },
+        component: () => import('@/views/admin/RolesView.vue'),
+        meta: { title: '角色权限' },
       },
       {
         path: 'reviews',
@@ -114,8 +114,8 @@ const routes = [
       },
       {
         path: 'audit',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '审计日志', description: '审计日志将在 P1.3 接入。' },
+        component: () => import('@/views/admin/AuditView.vue'),
+        meta: { title: '审计日志' },
       },
       {
         path: 'settings',

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
-from app.core.errors import success
+from app.core.errors import AuthError, success
+from app.db.models.audit import AUDIT_STATUS_FAILURE
 from app.db.models.rbac import User
 from app.db.session import get_db
 from app.schemas.auth import (
@@ -15,6 +16,12 @@ from app.schemas.auth import (
     LoginResponse,
     RegisterRequest,
     UserOut,
+)
+from app.services.audit_service import (
+    ACTION_LOGIN_FAILED,
+    ACTION_LOGIN_SUCCESS,
+    client_ip,
+    record_audit_safely,
 )
 from app.services.auth_service import (
     authenticate,
@@ -44,13 +51,40 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/login")
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)) -> dict:
-    user = await authenticate(db, body.username, body.password)
+async def login(
+    body: LoginRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    try:
+        user = await authenticate(db, body.username, body.password)
+    except AuthError as exc:
+        await record_audit_safely(
+            db,
+            action=ACTION_LOGIN_FAILED,
+            username=body.username,
+            target_type="user",
+            detail={"reason": exc.message},
+            ip=client_ip(request),
+            status=AUDIT_STATUS_FAILURE,
+        )
+        raise
+
     token, expires_in = issue_token(user)
     payload = LoginResponse(
         access_token=token,
         expires_in=expires_in,
         user=UserOut.from_user(user),
+    )
+    # Build the response before writing the audit row so an audit failure can
+    # never invalidate objects needed by the successful login response.
+    await record_audit_safely(
+        db,
+        action=ACTION_LOGIN_SUCCESS,
+        actor=user,
+        target_type="user",
+        target_id=user.id,
+        ip=client_ip(request),
     )
     return success(payload.model_dump())
 
