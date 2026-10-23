@@ -33,8 +33,13 @@ const routes = [
       },
       {
         path: 'courses',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '我的课程', description: '课程列表与课程详情将在 P1.4 接入。' },
+        component: () => import('@/views/student/CoursesView.vue'),
+        meta: { title: '我的课程' },
+      },
+      {
+        path: 'courses/:id',
+        component: () => import('@/views/student/CourseDetailView.vue'),
+        meta: { title: '课程详情' },
       },
       {
         path: 'qa',
@@ -71,8 +76,13 @@ const routes = [
       },
       {
         path: 'courses',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '课程管理', description: '建课、章节与知识点管理将在 P1.4 接入。' },
+        component: () => import('@/views/teacher/CoursesView.vue'),
+        meta: { title: '课程管理' },
+      },
+      {
+        path: 'courses/:id',
+        component: () => import('@/views/teacher/CourseEditorView.vue'),
+        meta: { title: '课程编辑' },
       },
       {
         path: 'materials',
@@ -109,8 +119,8 @@ const routes = [
       },
       {
         path: 'reviews',
-        component: () => import('@/views/PlaceholderView.vue'),
-        meta: { title: '课程审核', description: '课程与资料审核将在 P1.4 / P1.5 接入。' },
+        component: () => import('@/views/admin/ReviewsView.vue'),
+        meta: { title: '课程审核' },
       },
       {
         path: 'audit',

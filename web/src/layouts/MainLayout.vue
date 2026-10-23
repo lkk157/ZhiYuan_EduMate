@@ -39,6 +39,10 @@ function closeMobile() {
   mobileOpen.value = false
 }
 
+function isMenuActive(path) {
+  return route.path === path || route.path.startsWith(`${path}/`)
+}
+
 function onCommand(command) {
   if (command === 'logout') {
     auth.logout()
@@ -65,6 +69,7 @@ function onCommand(command) {
           :key="item.path"
           :to="item.path"
           class="nav-item"
+          :class="{ 'is-active': isMenuActive(item.path) }"
           active-class="is-active"
           @click="closeMobile"
         >

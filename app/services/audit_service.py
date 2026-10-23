@@ -21,6 +21,16 @@ ACTION_USER_UPDATE = "user.update"
 ACTION_USER_ENABLE = "user.enable"
 ACTION_USER_DISABLE = "user.disable"
 ACTION_USER_PASSWORD_RESET = "user.password.reset"
+ACTION_COURSE_CREATE = "course.create"
+ACTION_COURSE_UPDATE = "course.update"
+ACTION_COURSE_SUBMIT = "course.submit"
+ACTION_COURSE_APPROVE = "course.approve"
+ACTION_COURSE_REJECT = "course.reject"
+ACTION_COURSE_INVITE_ROTATE = "course.invite.rotate"
+ACTION_COURSE_INVITE_TOGGLE = "course.invite.toggle"
+ACTION_COURSE_STUDENT_ADD = "course.student.add"
+ACTION_COURSE_STUDENT_REMOVE = "course.student.remove"
+ACTION_COURSE_JOIN = "course.join"
 
 SENSITIVE_KEYS = {
     "password",

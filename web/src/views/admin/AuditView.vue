@@ -14,6 +14,16 @@ const ACTION_LABELS = {
   'user.enable': '启用用户',
   'user.disable': '禁用用户',
   'user.password.reset': '重置密码',
+  'course.create': '创建课程',
+  'course.update': '更新课程',
+  'course.submit': '提交课程审核',
+  'course.approve': '课程审核通过',
+  'course.reject': '课程审核驳回',
+  'course.invite.rotate': '轮换邀请码',
+  'course.invite.toggle': '启停邀请码',
+  'course.student.add': '添加学生',
+  'course.student.remove': '移出学生',
+  'course.join': '加入课程',
 }
 
 const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({
