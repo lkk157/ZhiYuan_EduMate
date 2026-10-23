@@ -22,7 +22,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.deps import get_current_user, require_permission
 from app.core.config import get_settings
 from app.core.errors import AppError, NotFoundError, ValidationError, success
-from app.db.models.material import ALLOWED_MATERIAL_SUFFIXES, INDEX_STATUSES, MATERIAL_STATUSES
+from app.db.models.material import (
+    ALLOWED_MATERIAL_SUFFIXES,
+    INDEX_STATUSES,
+    MATERIAL_SCOPE_PERSONAL,
+    MATERIAL_STATUSES,
+)
 from app.db.models.rbac import ROLE_ADMIN, ROLE_TEACHER, User
 from app.db.session import get_db, get_session_factory
 from app.schemas.material import MaterialReviewRequest, material_list_out
@@ -247,7 +252,8 @@ async def get_material(
 ) -> dict:
     material = await material_service.get_material(db, material_id)
     await material_service.ensure_material_access(db, material, user)
-    return success(material_list_out(material, management=_management_view(user)))
+    management = _management_view(user) or material.scope == MATERIAL_SCOPE_PERSONAL
+    return success(material_list_out(material, management=management))
 
 
 @router.post("/{material_id}/review")

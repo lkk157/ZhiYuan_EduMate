@@ -16,6 +16,7 @@ from app.core.errors import (
     ConflictError,
     ForbiddenError,
     NotFoundError,
+    RagError,
     ValidationError,
 )
 from app.db.base import utc_now
@@ -26,12 +27,15 @@ from app.db.models.course import (
     CourseEnrollment,
     Knowledge,
 )
+from app.db.models.knowledge_base import KB_STATUS_ACTIVE, KnowledgeBase
 from app.db.models.material import (
     ALLOWED_MATERIAL_SUFFIXES,
     INDEX_STATUS_FAILED,
     INDEX_STATUS_INDEXED,
     INDEX_STATUS_INDEXING,
     INDEX_STATUS_PENDING,
+    MATERIAL_SCOPE_COURSE,
+    MATERIAL_SCOPE_PERSONAL,
     MATERIAL_STATUS_APPROVED,
     MATERIAL_STATUS_DELETED,
     MATERIAL_STATUS_PENDING,
@@ -53,6 +57,8 @@ logger = logging.getLogger(__name__)
 
 MATERIAL_LOAD = (
     selectinload(Material.course),
+    selectinload(Material.knowledge_base),
+    selectinload(Material.owner),
     selectinload(Material.chapter),
     selectinload(Material.knowledge),
     selectinload(Material.uploader),
@@ -101,6 +107,16 @@ async def ensure_material_access(
 ) -> None:
     if material.status == MATERIAL_STATUS_DELETED:
         raise NotFoundError("资料不存在")
+
+    if material.scope == MATERIAL_SCOPE_PERSONAL:
+        if user.role.name != ROLE_STUDENT or material.owner_id != user.id:
+            # Personal knowledge bases are private, including from admins.
+            raise ForbiddenError("无权访问该资料")
+        kb = material.knowledge_base
+        if kb is None or kb.status != KB_STATUS_ACTIVE:
+            raise NotFoundError("知识库不存在或已删除")
+        return
+
     if user.role.name == ROLE_ADMIN:
         return
     if user.role.name == ROLE_TEACHER:
@@ -113,7 +129,7 @@ async def ensure_material_access(
         raise ForbiddenError("资料尚未发布")
     if material.course is None or material.course.status != COURSE_STATUS_APPROVED:
         raise ForbiddenError("课程尚未发布")
-    if not await _is_enrolled(db, material.course_id, user.id):
+    if material.course_id is None or not await _is_enrolled(db, material.course_id, user.id):
         raise ForbiddenError("请先加入课程")
 
 
@@ -132,7 +148,7 @@ async def list_materials(
     status: str | None = None,
     index_status: str | None = None,
 ) -> tuple[list[Material], int]:
-    conditions = []
+    conditions = [Material.scope == MATERIAL_SCOPE_COURSE]
 
     base = select(Material).options(*MATERIAL_LOAD)
     count_stmt = select(func.count(func.distinct(Material.id))).select_from(Material)
@@ -183,15 +199,27 @@ async def list_materials(
 async def create_material(
     db: AsyncSession,
     *,
-    course: Course,
     uploader: User,
     upload: UploadFile,
     title: str | None,
+    course: Course | None = None,
+    knowledge_base: KnowledgeBase | None = None,
     chapter_id: int | None = None,
     knowledge_id: int | None = None,
     ip: str | None = None,
 ) -> Material:
-    if course.status != COURSE_STATUS_APPROVED:
+    if (course is None) == (knowledge_base is None):
+        raise ValidationError("必须指定课程或个人知识库")
+    personal = knowledge_base is not None
+
+    if knowledge_base is not None:
+        if knowledge_base.status != KB_STATUS_ACTIVE:
+            raise NotFoundError("知识库不存在或已删除")
+        if knowledge_base.owner_id != uploader.id:
+            raise ForbiddenError("只能向自己的知识库上传资料")
+        if chapter_id is not None or knowledge_id is not None:
+            raise ValidationError("个人知识库资料不支持关联课程章节")
+    if course is not None and course.status != COURSE_STATUS_APPROVED:
         raise ConflictError("课程发布后才能上传资料")
 
     original = Path(upload.filename or "").name
@@ -204,21 +232,25 @@ async def create_material(
 
     chapter: Chapter | None = None
     knowledge: Knowledge | None = None
-    if chapter_id is not None:
-        chapter = next((item for item in course.chapters if item.id == chapter_id), None)
-        if chapter is None:
-            raise ValidationError("章节不属于该课程")
-    if knowledge_id is not None:
-        if chapter is None:
-            raise ValidationError("选择知识点前请先选择章节")
-        knowledge = next((item for item in chapter.knowledges if item.id == knowledge_id), None)
-        if knowledge is None:
-            raise ValidationError("知识点不属于所选章节")
+    if course is not None:
+        if chapter_id is not None:
+            chapter = next((item for item in course.chapters if item.id == chapter_id), None)
+            if chapter is None:
+                raise ValidationError("章节不属于该课程")
+        if knowledge_id is not None:
+            if chapter is None:
+                raise ValidationError("选择知识点前请先选择章节")
+            knowledge = next((item for item in chapter.knowledges if item.id == knowledge_id), None)
+            if knowledge is None:
+                raise ValidationError("知识点不属于所选章节")
 
     settings = get_settings()
     material_title = (title or "").strip() or Path(original).stem[:200] or original
     material = Material(
+        scope=MATERIAL_SCOPE_PERSONAL if personal else MATERIAL_SCOPE_COURSE,
         course=course,
+        knowledge_base=knowledge_base,
+        owner=uploader,
         chapter=chapter,
         knowledge=knowledge,
         uploader=uploader,
@@ -228,7 +260,7 @@ async def create_material(
         file_path="",
         file_type=suffix,
         file_size=0,
-        status=MATERIAL_STATUS_PENDING,
+        status=MATERIAL_STATUS_APPROVED if personal else MATERIAL_STATUS_PENDING,
         index_status=INDEX_STATUS_PENDING,
     )
     db.add(material)
@@ -236,7 +268,11 @@ async def create_material(
 
     sanitized = sanitize_filename(original)
     rag_filename = f"m{material.id}__{sanitized}"
-    relative = Path("courses") / str(course.id) / rag_filename
+    if personal:
+        base_dir = Path("personal") / str(uploader.id) / str(knowledge_base.id)
+    else:
+        base_dir = Path("courses") / str(course.id)
+    relative = base_dir / rag_filename
     destination = settings.upload_path / relative
     destination.parent.mkdir(parents=True, exist_ok=True)
 
@@ -271,7 +307,9 @@ async def create_material(
         target_id=material.id,
         detail={
             "title": material.title,
-            "course": course.title,
+            "scope": material.scope,
+            "course": course.title if course is not None else None,
+            "knowledge_base": knowledge_base.name if knowledge_base is not None else None,
             "filename": material.source_filename,
             "size": size,
         },
@@ -402,13 +440,28 @@ async def index_material(
         await db.commit()
 
         try:
-            course = material.course
-            if course.rag_group_id is None:
-                group_id = await rag_client.ensure_group(f"edumate-course-{course.id}")
-                course.rag_group_id = group_id
-                await db.commit()
+            if material.scope == MATERIAL_SCOPE_PERSONAL:
+                knowledge_base = material.knowledge_base
+                if knowledge_base is None or knowledge_base.status != KB_STATUS_ACTIVE:
+                    raise RagError("知识库不存在或已删除")
+                if knowledge_base.rag_group_id is None:
+                    group_id = await rag_client.ensure_group(f"edumate-kb-{knowledge_base.id}")
+                    knowledge_base.rag_group_id = group_id
+                    await db.commit()
+                else:
+                    group_id = knowledge_base.rag_group_id
+                group_label = f"kb={knowledge_base.id}"
             else:
-                group_id = course.rag_group_id
+                course = material.course
+                if course is None:
+                    raise RagError("课程不存在")
+                if course.rag_group_id is None:
+                    group_id = await rag_client.ensure_group(f"edumate-course-{course.id}")
+                    course.rag_group_id = group_id
+                    await db.commit()
+                else:
+                    group_id = course.rag_group_id
+                group_label = f"course={course.id}"
 
             path = material_absolute_path(material)
             result = await rag_client.upload_document(
@@ -423,9 +476,9 @@ async def index_material(
             material.indexed_at = utc_now()
             await db.commit()
             logger.info(
-                "material indexed: id=%s course=%s doc_id=%s",
+                "material indexed: id=%s %s doc_id=%s",
                 material.id,
-                course.id,
+                group_label,
                 material.vector_doc_id,
             )
         except Exception as exc:  # noqa: BLE001 - all RAG failures must be recorded

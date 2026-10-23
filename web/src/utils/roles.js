@@ -17,6 +17,7 @@ export const ROLE_MENUS = {
     { label: 'AI 学伴问答', path: '/student/qa', icon: 'ChatDotRound' },
     { label: '问答记录', path: '/student/qa-history', icon: 'Clock' },
     { label: '学习资料', path: '/student/materials', icon: 'FolderOpened' },
+    { label: '我的知识库', path: '/student/knowledge-bases', icon: 'Files' },
     { label: '习题练习', path: '/student/practice', icon: 'EditPen' },
   ],
   teacher: [

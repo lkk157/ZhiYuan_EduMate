@@ -36,6 +36,9 @@ ACTION_MATERIAL_APPROVE = "material.approve"
 ACTION_MATERIAL_REJECT = "material.reject"
 ACTION_MATERIAL_INDEX_RETRY = "material.index.retry"
 ACTION_MATERIAL_DELETE = "material.delete"
+ACTION_KB_CREATE = "knowledge_base.create"
+ACTION_KB_UPDATE = "knowledge_base.update"
+ACTION_KB_DELETE = "knowledge_base.delete"
 
 SENSITIVE_KEYS = {
     "password",

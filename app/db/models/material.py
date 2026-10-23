@@ -1,4 +1,4 @@
-"""Course material metadata and RAG indexing state."""
+"""Course/personal material metadata and RAG indexing state."""
 
 from __future__ import annotations
 
@@ -20,6 +20,11 @@ MATERIAL_STATUSES = {
     MATERIAL_STATUS_REJECTED,
     MATERIAL_STATUS_DELETED,
 }
+
+MATERIAL_SCOPE_COURSE = "course"
+MATERIAL_SCOPE_PERSONAL = "personal"
+
+MATERIAL_SCOPES = {MATERIAL_SCOPE_COURSE, MATERIAL_SCOPE_PERSONAL}
 
 INDEX_STATUS_PENDING = "pending"
 INDEX_STATUS_INDEXING = "indexing"
@@ -46,10 +51,25 @@ ALLOWED_MATERIAL_SUFFIXES = {
 class Material(PkMixin, TimestampMixin, Base):
     __tablename__ = "materials"
 
-    course_id: Mapped[int] = mapped_column(
+    scope: Mapped[str] = mapped_column(
+        String(16), default=MATERIAL_SCOPE_COURSE, nullable=False, index=True
+    )
+    course_id: Mapped[int | None] = mapped_column(
         ID_TYPE,
         ForeignKey("courses.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
+        index=True,
+    )
+    knowledge_base_id: Mapped[int | None] = mapped_column(
+        ID_TYPE,
+        ForeignKey("knowledge_bases.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    owner_id: Mapped[int | None] = mapped_column(
+        ID_TYPE,
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
         index=True,
     )
     chapter_id: Mapped[int | None] = mapped_column(
@@ -90,6 +110,8 @@ class Material(PkMixin, TimestampMixin, Base):
     download_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     course = relationship("Course", lazy="selectin")
+    knowledge_base = relationship("KnowledgeBase", lazy="selectin")
+    owner = relationship("User", foreign_keys=[owner_id], lazy="selectin")
     chapter = relationship("Chapter", lazy="selectin")
     knowledge = relationship("Knowledge", lazy="selectin")
     uploader = relationship("User", foreign_keys=[uploader_id], lazy="selectin")

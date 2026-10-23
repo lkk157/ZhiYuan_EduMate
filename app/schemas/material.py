@@ -24,8 +24,17 @@ class MaterialReviewRequest(BaseModel):
 def material_out(material: Material, *, management: bool) -> dict:
     payload = {
         "id": material.id,
+        "scope": material.scope,
         "course_id": material.course_id,
         "course_title": material.course.title if material.course else None,
+        "knowledge_base_id": material.knowledge_base_id,
+        "knowledge_base_name": (material.knowledge_base.name if material.knowledge_base else None),
+        "owner_id": material.owner_id,
+        "owner": (
+            {"id": material.owner.id, "username": material.owner.username}
+            if material.owner
+            else None
+        ),
         "chapter_id": material.chapter_id,
         "chapter_title": material.chapter.title if material.chapter else None,
         "knowledge_id": material.knowledge_id,

@@ -57,6 +57,11 @@ const routes = [
         meta: { title: '学习资料' },
       },
       {
+        path: 'knowledge-bases',
+        component: () => import('@/views/student/KnowledgeBasesView.vue'),
+        meta: { title: '我的知识库' },
+      },
+      {
         path: 'practice',
         component: () => import('@/views/PlaceholderView.vue'),
         meta: { title: '习题练习', description: '习题与答题将在阶段二接入。' },

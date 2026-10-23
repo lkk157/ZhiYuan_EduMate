@@ -29,6 +29,9 @@ const ACTION_LABELS = {
   'material.reject': '资料审核驳回',
   'material.index.retry': '重试资料索引',
   'material.delete': '删除资料',
+  'knowledge_base.create': '创建知识库',
+  'knowledge_base.update': '更新知识库',
+  'knowledge_base.delete': '删除知识库',
 }
 
 const actionOptions = Object.entries(ACTION_LABELS).map(([value, label]) => ({
