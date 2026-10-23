@@ -41,7 +41,7 @@
 | P1.4 | 课程体系、邀请码与选课 | 已完成 | `e4f6464` · `feat(course): course hierarchy, review and enrollment via invite code` |
 | P1.5 | 课程资料上传、审核与 RAG 索引 | 已完成 | `6e9c96b` · `feat(material): upload, review and real RAG indexing` |
 | P1.6 | 学生个人知识库与资料索引 | 已完成 | `a99239c` · `feat(kb): personal knowledge bases and direct indexing` |
-| P1.7 | 问答、引用与问答记录（课程/个人库） | 待开始 | — |
+| P1.7 | 问答、引用与问答记录（课程/个人库） | 已完成 | `d4a02ba` · `feat(qa): scoped RAG Q&A with citations and history` |
 | P1.8 | 基础推荐与学生首页（已选课程） | 待开始 | — |
 | P1.9 | 部署、种子数据与阶段一验收 | 待开始 | — |
 | P2.1 | 题库与答题 | 待开始 | — |
@@ -203,7 +203,21 @@
 - **前端**：学生 AI 问答页（范围选择器、气泡、引用卡、加载态、降级提示）、问答记录页。
 - **测试**：课程未选 403、他人知识库 403/404、`all` 分组合并、`hit=false`、429/502/超时、引用映射、历史归属、未就绪 409。
 - **验证**：学生分别对课程资料、个人知识库提问，答案引用正确来源。
-- **提交**：`feat(qa): scoped Q&A over course and personal knowledge bases`
+- **提交**：`feat(qa): scoped RAG Q&A with citations and history`
+- **验收记录（2026-10-23，提交 `d4a02ba`）**：
+  - 后端 `pytest -q`：**83 passed**；`ruff check app tests` / `ruff format --check app tests`：通过。
+  - 前端 `npm run test:unit -- --run`：**18 个测试文件 / 30 个测试通过**；`npm run build`：成功。
+  - 数据库：新增 `qa_records` 表，迁移 `e5f6a7b8c9d0` 已在 MySQL 与 SQLite 测试库验证。
+  - 新增接口：`POST /qa/ask`、`GET /qa/history`。
+  - 范围：`scope=course` 必填 `course_id`；`personal` 必填 `knowledge_base_id`；`all` 至少选择其一。课程分组与个人知识库分组合并去重后传给 RAG。
+  - 权限：课程问答校验已选且已发布课程；个人问答仅限知识库 owner；教师/管理员访问个人知识库问答 403/404；历史记录仅本人可见。
+  - 引用：按 `^m(\d+)__(.+)$` 从 RAG `sources[].file_name` 回映射 materials，输出资料 ID、标题、原始文件名、页码、片段、相似度、课程/章节或个人知识库名称，并区分课程资料与个人资料。
+  - 状态：成功写入 `status=success`；RAG 超时/429/502/连接失败等降级为友好提示并写 `status=degraded`，HTTP 仍返回 200 供前端展示；`hit=false` 保留给前端提示“未找到依据”。
+  - 历史：支持按 `course_id` / `knowledge_base_id` / `scope` 过滤与分页；未就绪课程或个人库返回 409。
+  - 前端：学生 AI 学伴页（课程/个人库/综合范围切换、课程与知识库选择、聊天气泡、引用卡、加载动画、降级/未找到依据标签、建议问题）；问答记录页（范围/课程/知识库筛选、答案、引用、状态、分页）。
+  - 真实联调：课程范围提问“什么是监督学习？”`hit=true`，返回课程资料引用（含 m4/m6）；个人知识库提问“数据结构的基础知识包括哪些内容？”`hit=true`，返回个人资料 m11 的多页引用；综合范围同时返回课程与个人资料引用；历史记录 total=3 且 `scope=personal` 过滤正确。
+
+> 说明：当前为同步单轮问答（RAG 无状态），流式/多轮上下文属于 P2.7；RAG 调用超时上限 300 秒，失败时以 degraded 记录而不是抛 5xx。
 
 ### P1.8 基础推荐与学生首页（已选课程）
 
@@ -295,3 +309,4 @@
 | 2026-10-23 | v1.4 | 完成 P1.5 资料上传、审核与真实 RAG 索引；新增 materials 表、课程 rag_group_id、RAG 客户端与健康检查；RAG 本机端口确认为 18000 |
 | 2026-10-23 | v1.5 | P1.5 增强（`712c39a`）：教师课程资料支持批量上传（≤10 个/批），新增 `/materials/batch`，前端上传弹窗支持多选与部分失败反馈 |
 | 2026-10-23 | v1.6 | 完成 P1.6 学生个人知识库：默认库自动创建、owner 隔离、独立 RAG 分组、个人资料直接索引与重试/软删除；materials 扩展 scope |
+| 2026-10-23 | v1.7 | 完成 P1.7 范围问答：课程/个人库/综合检索、引用回映射、RAG 降级、问答历史与前端问答/记录页；新增 qa_records |
