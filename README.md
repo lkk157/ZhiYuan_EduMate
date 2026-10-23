@@ -5,7 +5,7 @@
 - **EduMate 主服务**：用户/权限、课程体系、资料元数据、问答记录、推荐、学情与治理。
 - **知源 RAG 服务**（已有，独立部署）：文档解析、向量检索与 LLM 生成，通过 `/v1` HTTP API 接入。
 
-> 当前进度：**P1.1 工程骨架、设计系统与登录壳已完成**，下一步 P1.2 认证与 RBAC。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
+> 当前进度：**P1.2 认证、RBAC 与三角色布局已完成**，下一步 P1.3 管理员治理。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
 
 ## 技术栈
 
@@ -57,6 +57,20 @@ docker compose up -d mysql redis
 - 健康检查：<http://127.0.0.1:8001/api/v1/health/live>
 - 就绪检查：<http://127.0.0.1:8001/api/v1/health/ready>
 - API 文档：<http://127.0.0.1:8001/docs>
+
+初始化演示账号：
+
+```bash
+.venv/Scripts/python.exe scripts/seed.py
+```
+
+| 账号 | 角色 | 密码 |
+|---|---|---|
+| `admin` | 管理员 | `SEED_DEMO_PASSWORD`（默认 `EduMate@2026`） |
+| `teacher` | 教师 | 同上 |
+| `student` | 学生 | 同上 |
+
+> 演示密码仅用于本地开发，部署前务必修改 `SEED_DEMO_PASSWORD` 并重新执行 `seed.py --reset-passwords`。
 
 ### 3. 前端
 

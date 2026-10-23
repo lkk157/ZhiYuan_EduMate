@@ -35,7 +35,7 @@
 | 编号 | 阶段 | 状态 | 提交 |
 |---|---|---|---|
 | P1.1 | 工程骨架、设计系统与登录壳 | 已完成 | `7045b53` · `chore: bootstrap EduMate backend, frontend and local infrastructure` |
-| P1.2 | 认证、RBAC 与三角色布局 | 待开始 | — |
+| P1.2 | 认证、RBAC 与三角色布局 | 已完成 | `feat(auth): JWT authentication, RBAC and three-role layouts` |
 | P1.3 | 管理员治理：用户、角色、审计 | 待开始 | — |
 | P1.4 | 课程体系与审核流 | 待开始 | — |
 | P1.5 | 资料上传、审核与 RAG 索引 | 待开始 | — |
@@ -79,6 +79,12 @@
 - **测试**：登录成功/失败/禁用；过期/伪造 token；改密后旧 token 失效；角色越权 403；前端 store 持久化、守卫跳转。
 - **验证**：三账号分别进入正确端；学生访问管理员接口 403。
 - **提交**：`feat(auth): JWT authentication, RBAC and three-role layouts`
+- **验收记录（2026-10-23）**：
+  - 后端 `pytest -q`：**25 passed**；`ruff check` / `ruff format --check`：通过。
+  - 前端 `npm run test:unit -- --run`：**4 个测试文件 / 10 个测试通过**；`npm run build`：成功。
+  - 数据库：`alembic upgrade head` 在 MySQL 与 SQLite 上均成功；`alembic downgrade base` 在 SQLite 上成功；`scripts/seed.py` 幂等执行成功（3 角色、12 权限、3 演示账号）。
+  - 运行时：admin 登录 12 项权限、teacher 5 项、student 2 项；`/auth/me` 正常；`/admin/ping` 对 admin=200、teacher/student=403。
+  - 安全：错误密码与未知用户返回同一提示；禁用用户、旧 token、伪造/过期 token 均被拒绝；改密后旧 token 失效。
 
 ### P1.3 管理员治理：用户、角色、审计
 

@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import __version__
-from app.api.v1 import health
+from app.api.v1 import admin, auth, health
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers, success
 from app.core.logging import configure_logging
@@ -46,6 +46,8 @@ app.add_middleware(RequestIdMiddleware)
 register_exception_handlers(app)
 
 app.include_router(health.router, prefix=f"{settings.api_prefix}/health")
+app.include_router(auth.router, prefix=settings.api_prefix)
+app.include_router(admin.router, prefix=settings.api_prefix)
 
 
 @app.get("/", tags=["meta"])
