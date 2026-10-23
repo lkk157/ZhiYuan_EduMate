@@ -36,7 +36,7 @@
 |---|---|---|---|
 | P1.1 | 工程骨架、设计系统与登录壳 | 已完成 | `7045b53` · `chore: bootstrap EduMate backend, frontend and local infrastructure` |
 | P1.2 | 认证、RBAC 与三角色布局 | 已完成 | `1354042` · `feat(auth): JWT authentication, RBAC and three-role layouts` |
-| P1.2b | 学生自助注册 | 已完成 | `feat(auth): student self-registration` |
+| P1.2b | 学生自助注册 | 已完成 | `a37c2f3` · `feat(auth): student self-registration` |
 | P1.3 | 管理员治理：用户、角色、审计 | 待开始 | — |
 | P1.4 | 课程体系、邀请码与选课 | 待开始 | — |
 | P1.5 | 课程资料上传、审核与 RAG 索引 | 待开始 | — |
