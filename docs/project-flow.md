@@ -38,7 +38,7 @@
 | P1.2 | 认证、RBAC 与三角色布局 | 已完成 | `1354042` · `feat(auth): JWT authentication, RBAC and three-role layouts` |
 | P1.2b | 学生自助注册 | 已完成 | `a37c2f3` · `feat(auth): student self-registration` |
 | P1.3 | 管理员治理：用户、角色、审计 | 已完成 | `0c2110e` · `feat(admin): user, role and audit management` |
-| P1.4 | 课程体系、邀请码与选课 | 待开始 | — |
+| P1.4 | 课程体系、邀请码与选课 | 已完成 | `e4f6464` · `feat(course): course hierarchy, review and enrollment via invite code` |
 | P1.5 | 课程资料上传、审核与 RAG 索引 | 待开始 | — |
 | P1.6 | 学生个人知识库与资料索引 | 待开始 | — |
 | P1.7 | 问答、引用与问答记录（课程/个人库） | 待开始 | — |
@@ -128,7 +128,20 @@
 - **前端**：教师课程列表/编辑、邀请码展示/复制/轮换、学生名单管理；管理员课程审核；学生“加入课程”输入邀请码与我的课程列表。
 - **测试**：课程归属、审核状态机、邀请码唯一/轮换/停用、加入已发布课程、重复加入幂等、教师添加/移除、未选学生访问 403、非本人课程不可编辑。
 - **验证**：教师建课并通过审核 → 生成邀请码 → 学生注册后凭码加入 → 我的课程出现该课程；教师也能直接添加学生。
-- **提交**：`feat(course): enrollment via invite code and teacher-managed students`
+- **提交**：`feat(course): course hierarchy, review and enrollment via invite code`
+- **验收记录（2026-10-23，提交 `e4f6464`）**：
+  - 后端 `pytest -q`：**51 passed**；`ruff check app tests` / `ruff format --check app tests`：通过。
+  - 前端 `npm run test:unit -- --run`：**12 个测试文件 / 24 个测试通过**；`npm run build`：成功。
+  - 数据库：新增 `courses`、`chapters`、`knowledges`、`course_enrollments` 四张表，迁移 `b2c3d4e5f6a7` 已在 MySQL 与 SQLite 测试库验证。
+  - 新增接口：`GET/POST /courses`、`GET/PUT /courses/{id}`、`POST /courses/{id}/submit`、`POST /courses/{id}/review`、`POST /courses/{id}/invite/rotate`、`PUT /courses/{id}/invite`、`POST /courses/join`、章节/知识点 CRUD、`GET/POST /courses/{id}/students`、`DELETE /courses/{id}/students/{student_id}`。
+  - 状态机：`draft/rejected` 可编辑并提交审核；`pending` 锁定；管理员通过后为 `approved`，驳回必须填写意见；仅 `approved` 课程允许加入/添加学生；`approved` 后课程结构锁定。
+  - 权限与隔离：教师仅能读写自己的课程；学生仅能访问“已选 + 已发布”课程；学生看到的课程详情不返回邀请码；管理员可查看/审核全部课程。
+  - 邀请码：每课程唯一 8 位代码；可轮换、可启停；轮换后旧码立即失效；重复加入幂等；加入来源记录 `invite_code` / `teacher_add`。
+  - 审计：`course.create/update/submit/approve/reject/invite.rotate/invite.toggle/join/student.add/student.remove` 写入审计。
+  - 运行时闭环：教师创建课程 → 添加章节/知识点 → 提交 → 管理员通过 → 学生凭码加入 → 我的课程出现该课程 → 学生详情不返回邀请码 → 教师名单显示学生 → 新注册学生未加入时访问 403 → 教师按用户名添加后可访问 → 轮换后旧码 404。
+  - 前端：教师课程卡片与编辑器（章节、知识点、邀请码、学生名单）、管理员课程审核弹窗、学生“我的课程”与加入课程、学生课程详情页；侧栏在课程子页面保持高亮。
+
+> 说明：当前 `approved` 课程结构锁定，避免审核后内容发生变化；如需修改已发布课程，纳入后续“课程修订/重新审核”能力。运行时验证在本地演示库留下课程 `P1.4 Demo Course 32998` 与学生 `p14student32998`。
 
 ### P1.5 课程资料上传、审核与 RAG 索引
 
@@ -248,3 +261,4 @@
 | 2026-10-22 | v1.0 | 初始流程落库；16 个小阶段；确认 RAG 适配现有 `/v1` API |
 | 2026-10-23 | v1.1 | 新增学生自助注册（P1.2b）；新增课程邀请码/教师拉人/选课（P1.4）；新增学生个人知识库（P1.6）；原问答/推荐/部署顺延为 P1.7-P1.9，共 18 个小阶段 |
 | 2026-10-23 | v1.2 | 完成 P1.3 管理员治理：用户管理、角色权限矩阵、审计日志与脱敏、最后管理员保护；新增 `audit_logs` 迁移 |
+| 2026-10-23 | v1.3 | 完成 P1.4 课程体系、审核流、邀请码与选课；新增课程/章节/知识点/选课表与课程审计动作；已发布课程结构锁定 |
