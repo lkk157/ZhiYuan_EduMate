@@ -46,6 +46,8 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 | 健康 | `GET /healthz` | 免鉴权，仅存活探针 |
 
 > 本机部署现状：RAG 容器内端口 8000，Docker Compose 映射到宿主 **18000**；EduMate 的 `RAG_BASE_URL` 指向实际映射端口。
+>
+> EduMate 课程资料支持单次最多 10 个文件的批量上传；每个文件独立保存、独立审核、独立索引，返回成功/失败明细。
 
 限制：
 

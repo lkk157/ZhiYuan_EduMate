@@ -145,23 +145,25 @@
 
 ### P1.5 课程资料上传、审核与 RAG 索引
 
-- **交付**：课程资料的 multipart 上传（pdf/docx/pptx/png/jpg/jpeg，≤200MB）；路径清洗与磁盘存储；RAG client（超时、429 重试、错误归一化）；每课程一个 RAG 分组；管理员审核通过后后台索引；`indexed/failed` 与重试；下载与软删除；RAG 健康检查。仅课程教师可上传，仅已选学生可查看已审核资料。
-- **前端**：教师资料上传/列表/状态/重试；管理员资料审核。
+- **交付**：课程资料的 multipart 上传（pdf/docx/pptx/png/jpg/jpeg，≤200MB），支持单次最多 10 个文件的批量上传；路径清洗与磁盘存储；RAG client（超时、429 重试、错误归一化）；每课程一个 RAG 分组；管理员审核通过后后台索引；`indexed/failed` 与重试；下载与软删除；RAG 健康检查。仅课程教师可上传，仅已选学生可查看已审核资料。
+- **前端**：教师资料上传（单文件/批量）、列表/状态/重试；管理员资料审核。
 - **测试**：类型/大小/路径穿越；分组幂等；审核→索引状态机；RAG 成功/失败/429/超时；引用前缀；软删除；未选学生 403。
 - **联调**：启动 RAG 容器、注册账号/API Key，上传示例 docx 并确认 `indexed`。
 - **提交**：`feat(material): upload, review and real RAG indexing`
 - **验收记录（2026-10-23，提交 `6e9c96b`）**：
-  - 后端 `pytest -q`：**67 passed**；`ruff check app tests` / `ruff format --check app tests`：通过。
+  - 后端 `pytest -q`：**69 passed**（含批量上传用例）；`ruff check app tests` / `ruff format --check app tests`：通过。
   - 前端 `npm run test:unit -- --run`：**15 个测试文件 / 27 个测试通过**；`npm run build`：成功。
   - 数据库：新增 `materials` 表与 `courses.rag_group_id` 字段，迁移 `c3d4e5f6a7b8` 已在 MySQL 与 SQLite 测试库验证。
   - RAG 接入：本机 RAG 服务实际映射端口 **18000**；通过 `scripts/register_rag_key.py` 注册 `edumate_service` 账号并签发 API Key，Key 仅写入本地 `.env`（已 gitignore）。`GET /materials/rag-health` 返回 `status=ok / reachable=true / auth_ok=true`。
   - 新增接口：`GET/POST /materials`、`GET /materials/{id}`、`GET /materials/{id}/download`、`POST /materials/{id}/review`、`POST /materials/{id}/index/retry`、`DELETE /materials/{id}`、`GET /materials/rag-health`。
   - 上传：PDF/DOCX/PPTX/PNG/JPG/JPEG，单文件 ≤200MB，文件名清洗，磁盘按 `courses/{course_id}/m{material_id}__{filename}` 存储；非课程教师/学生/未发布课程均被拒绝。
+  - 批量上传（提交 `712c39a`）：`POST /materials/batch` 支持单次 ≤10 个文件，统一课程/章节/知识点；多文件标题自动取文件名，单文件可自定义标题；返回 `items/succeeded/failed/errors`，部分失败不影响成功文件；类型或大小等批次级校验不通过时整批拒绝、不落库。
   - 索引状态机：上传 `pending` → 管理员通过触发后台索引 `indexing` → `indexed` / `failed`；失败记录 `index_error` 并可由教师重试；索引文件名固定 `m<material_id>__` 前缀，供后续引用回映射。
   - RAG 分组：首次索引按 `edumate-course-{course_id}` 懒创建并持久化 `rag_group_id`；同课程后续资料复用同一分组。
   - 权限：教师仅管理自己课程资料；学生仅能访问已加入且已发布课程中 `approved` 的资料；学生详情不返回 `rag_filename/vector_doc_id/index_error`；软删除后所有角色不可访问文件（向量暂不删除，受 RAG `/v1` 无删除接口限制）。
   - 审计：`material.upload/approve/reject/index.retry/delete` 写入审计。
   - 真实联调：使用 `samples/机器学习基础.docx`（37KB）上传 → 管理员通过 → 后台索引 → `indexed`，RAG 分组 `edumate-course-1`（id=12）文档数 1，`vector_doc_id=75`；学生列表可见并成功下载原始文件。另验证驳回资料对学生不可见、软删除后学生不可下载。
+  - 批量真实联调（2026-10-23）：一次上传 `机器学习基础.docx` 与 `数据结构与算法基础.docx`，返回 `succeeded=2`，自动标题分别为两个文件名；包含 `bad.exe` 的批次被整批拒绝（422，不落库）。审核通过第一份后索引成功（`vector_doc_id=76`），第二份软删除成功。
   - 前端：教师资料页（课程/审核/索引筛选、上传弹窗、索引状态轮询、失败重试、下载、删除、RAG 健康提示）；管理员资料审核页；学生“学习资料”页与课程详情资料区；管理员导航新增“资料审核”，仪表盘显示真实 RAG 健康状态。
 
 > 说明：RAG `/v1` 无文档删除接口，软删除只影响 EduMate 业务可见性，向量仍保留；`samples/` 下示例 docx 与生成脚本已提交。真实联调在本地演示库留下课程 1 的已索引资料「机器学习基础讲义」，以及一条已软删除的驳回示例资料。
@@ -278,3 +280,4 @@
 | 2026-10-23 | v1.2 | 完成 P1.3 管理员治理：用户管理、角色权限矩阵、审计日志与脱敏、最后管理员保护；新增 `audit_logs` 迁移 |
 | 2026-10-23 | v1.3 | 完成 P1.4 课程体系、审核流、邀请码与选课；新增课程/章节/知识点/选课表与课程审计动作；已发布课程结构锁定 |
 | 2026-10-23 | v1.4 | 完成 P1.5 资料上传、审核与真实 RAG 索引；新增 materials 表、课程 rag_group_id、RAG 客户端与健康检查；RAG 本机端口确认为 18000 |
+| 2026-10-23 | v1.5 | P1.5 增强（`712c39a`）：教师课程资料支持批量上传（≤10 个/批），新增 `/materials/batch`，前端上传弹窗支持多选与部分失败反馈 |
