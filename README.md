@@ -5,7 +5,7 @@
 - **EduMate 主服务**：用户/权限、课程体系、资料元数据、问答记录、推荐、学情与治理。
 - **知源 RAG 服务**（已有，独立部署）：文档解析、向量检索与 LLM 生成，通过 `/v1` HTTP API 接入。
 
-> 当前进度：**P1.5 课程资料上传、审核与真实 RAG 索引已完成**。资料支持 PDF/DOCX/PPTX/图片，教师可批量上传（单次最多 10 个文件）；管理员审核通过后自动索引到课程对应的 RAG 分组，失败可重试；学生仅能看到已选课程中已审核通过的资料。下一步 P1.6 学生个人知识库。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
+> 当前进度：**P1.6 学生个人知识库已完成**。学生可创建多个私有知识库、上传个人资料并直接索引到独立 RAG 分组，owner 隔离、失败可重试；课程资料审核、批量上传与真实 RAG 索引也已可用。下一步 P1.7 课程/个人知识库范围问答与问答记录。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
 
 ## 技术栈
 

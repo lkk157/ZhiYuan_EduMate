@@ -40,7 +40,7 @@
 | P1.3 | 管理员治理：用户、角色、审计 | 已完成 | `0c2110e` · `feat(admin): user, role and audit management` |
 | P1.4 | 课程体系、邀请码与选课 | 已完成 | `e4f6464` · `feat(course): course hierarchy, review and enrollment via invite code` |
 | P1.5 | 课程资料上传、审核与 RAG 索引 | 已完成 | `6e9c96b` · `feat(material): upload, review and real RAG indexing` |
-| P1.6 | 学生个人知识库与资料索引 | 待开始 | — |
+| P1.6 | 学生个人知识库与资料索引 | 已完成 | `a99239c` · `feat(kb): personal knowledge bases and direct indexing` |
 | P1.7 | 问答、引用与问答记录（课程/个人库） | 待开始 | — |
 | P1.8 | 基础推荐与学生首页（已选课程） | 待开始 | — |
 | P1.9 | 部署、种子数据与阶段一验收 | 待开始 | — |
@@ -178,7 +178,20 @@
 - **前端**：学生“我的知识库”页面（知识库卡片、创建/重命名、上传资料、索引状态、删除），与课程资料明确分区。
 - **测试**：默认库创建幂等；owner 隔离（他人不可读写）；分组懒创建；个人资料直接索引；失败重试；软删除；文件类型/大小校验。
 - **验证**：学生创建知识库 → 上传自己的学习资料 → 索引成功 → 在问答中选择个人知识库提问并获得引用。
-- **提交**：`feat(kb): personal knowledge bases and material indexing`
+- **提交**：`feat(kb): personal knowledge bases and direct indexing`
+- **验收记录（2026-10-23，提交 `a99239c`）**：
+  - 后端 `pytest -q`：**75 passed**；`ruff check app tests` / `ruff format --check app tests`：通过。
+  - 前端 `npm run test:unit -- --run`：**16 个测试文件 / 28 个测试通过**；`npm run build`：成功。
+  - 数据库：新增 `knowledge_bases` 表；`materials` 增加 `scope/knowledge_base_id/owner_id`，`course_id` 改为可空；迁移 `d4e5f6a7b8c9` 已在 MySQL 与 SQLite 测试库验证。
+  - 新增接口：`GET/POST /knowledge-bases`、`PUT/DELETE /knowledge-bases/{id}`、`GET/POST /knowledge-bases/{id}/materials`、`DELETE /knowledge-bases/{id}/materials/{material_id}`、`POST /knowledge-bases/{id}/materials/{material_id}/index/retry`。
+  - 默认知识库：学生首次访问自动创建“我的知识库”，重复访问不重复创建；默认库不可删除，可重命名。
+  - owner 隔离：仅学生本人可读写自己的知识库；其他学生访问知识库 404、访问个人资料 403；教师与管理员同样不能访问个人资料/个人知识库列表。
+  - 个人资料：上传即 `approved`，无需管理员审核，直接后台索引；每知识库懒创建 `edumate-kb-{kb_id}` RAG 分组；文件名保持 `m<material_id>__` 前缀；失败可重试；软删除后不可下载。
+  - 课程资料与个人资料共用 materials 表，通过 `scope` 区分；`GET /materials` 仅返回课程资料，个人资料只通过知识库接口访问。
+  - 前端：学生“我的知识库”页面（知识库卡片、创建/重命名/删除、上传资料、索引状态轮询、失败重试、下载、删除）；侧栏新增入口；管理员审计动作新增知识库/个人资料动作。
+  - 真实联调：学生默认知识库 id=1；创建并重命名 `P1.6 算法笔记-已重命名`（id=2）；上传 `samples/数据结构与算法基础.docx` → 直接索引成功，`vector_doc_id=80`，RAG 分组 `edumate-kb-2` 文档数 1；知识库计数 1 份资料 / 1 已索引；下载 200。另一学生访问该库 404、访问资料 403；管理员访问均 403。
+
+> 说明：删除知识库只做软删除并阻断访问，RAG `/v1` 无删除接口，向量仍保留；默认知识库不可删除。个人知识库资料不进入管理员资料审核列表。
 
 ### P1.7 问答、引用与问答记录（课程/个人库）
 
@@ -281,3 +294,4 @@
 | 2026-10-23 | v1.3 | 完成 P1.4 课程体系、审核流、邀请码与选课；新增课程/章节/知识点/选课表与课程审计动作；已发布课程结构锁定 |
 | 2026-10-23 | v1.4 | 完成 P1.5 资料上传、审核与真实 RAG 索引；新增 materials 表、课程 rag_group_id、RAG 客户端与健康检查；RAG 本机端口确认为 18000 |
 | 2026-10-23 | v1.5 | P1.5 增强（`712c39a`）：教师课程资料支持批量上传（≤10 个/批），新增 `/materials/batch`，前端上传弹窗支持多选与部分失败反馈 |
+| 2026-10-23 | v1.6 | 完成 P1.6 学生个人知识库：默认库自动创建、owner 隔离、独立 RAG 分组、个人资料直接索引与重试/软删除；materials 扩展 scope |

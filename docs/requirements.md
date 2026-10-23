@@ -62,6 +62,9 @@ Vue3 SPA → EduMate API（FastAPI）→ RagClient → 知源 RAG 服务（现�
 |---|---|
 | 课程知识库 | 每课程一个 RAG 分组；`course.rag_group_id`；课程资料审核通过后索引 |
 | 个人知识库 | 每个学生知识库一个 RAG 分组；`knowledge_base.rag_group_id`；按 owner 隔离；个人资料直接索引、无需管理员审核 |
+
+- 学生首次访问个人知识库时自动创建“我的知识库”作为默认库；默认库可重命名但不可删除，其他知识库可创建、重命名和软删除。
+- 课程资料与个人资料统一使用 `materials` 表，通过 `scope=course|personal` 区分；个人资料不进入管理员审核列表。
 | 资料索引 | 课程资料审核通过后上传；个人资料由本人上传；`rag_filename = m{material_id}__{原文件名}`；保存 `doc_id` |
 | 引用回映射 | 正则 `^m(\d+)__(.+)$` → material → 课程章节/个人知识库；失败时原始展示 |
 | 问答范围 | `scope=course` 用课程分组；`scope=personal` 用本人知识库分组；`scope=all` 合并已选课程 + 本人知识库分组 |
