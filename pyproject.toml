@@ -12,6 +12,8 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "sqlalchemy[asyncio]>=2.0",
     "asyncmy>=0.2.9",
+    # asyncmy needs cryptography for MySQL 8 caching_sha2_password full auth.
+    "cryptography>=42",
     "pymysql>=1.1",
     "alembic>=1.13",
     "pydantic>=2.7",

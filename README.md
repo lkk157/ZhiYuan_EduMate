@@ -126,6 +126,12 @@ EduMate 使用 `X-API-Key` 鉴权。首次接入时运行：
 | Redis | 6379 |
 | Docker Web（阶段一末） | 8080 |
 
+## 故障排查
+
+- **前端登录返回 502**：通常是 EduMate 后端未启动或已退出，Vite 代理 `127.0.0.1:8001` 失败。确认后端进程存在，并访问 <http://127.0.0.1:8001/api/v1/health/live>；如未启动，重新执行后端启动命令。
+- **`/health/ready` 返回 `database=error`**：检查 MySQL 容器（`docker compose up -d mysql redis`）。若后端日志出现 `'cryptography' package is required for sha256_password or caching_sha2_password`，执行 `.venv/Scripts/python.exe -m pip install -e ".[dev]"` 安装依赖后重启后端。MySQL 8 默认使用 `caching_sha2_password`，`cryptography` 已在项目依赖中声明。
+- **端口占用**：EduMate API 固定 8001，RAG 占用 8000/宿主 18000，MySQL 3307，Redis 6379；修改端口时同步更新 `.env` 与 Vite 代理。
+
 ## 开发约定
 
 - 每个小阶段：实现 → 单测 → 全量测试 → 验证 → 提交 → 推送 → 汇报。

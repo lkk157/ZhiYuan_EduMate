@@ -3,6 +3,8 @@ fastapi>=0.115
 uvicorn[standard]>=0.30
 sqlalchemy[asyncio]>=2.0
 asyncmy>=0.2.9
+# Required by asyncmy for MySQL 8 caching_sha2_password authentication.
+cryptography>=42
 pymysql>=1.1
 alembic>=1.13
 pydantic>=2.7
