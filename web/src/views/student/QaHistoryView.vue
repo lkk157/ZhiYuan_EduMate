@@ -6,6 +6,7 @@ import { Refresh, Search } from '@element-plus/icons-vue'
 import { listCourses } from '@/api/course'
 import { listKnowledgeBases } from '@/api/knowledgeBase'
 import { listQaHistory } from '@/api/qa'
+import SourceCitations from '@/components/SourceCitations.vue'
 import { formatDateTime } from '@/utils/format'
 
 const loading = ref(false)
@@ -73,16 +74,6 @@ function scopeLabel(value) {
   if (value === 'course') return '课程知识库'
   if (value === 'personal') return '个人知识库'
   return '综合检索'
-}
-
-function referenceScopeLabel(reference) {
-  return reference.scope === 'personal' ? '个人资料' : '课程资料'
-}
-
-function scoreText(score) {
-  const value = Number(score)
-  if (Number.isNaN(value)) return ''
-  return `匹配 ${Math.round(value * 100)}%`
 }
 
 onMounted(async () => {
@@ -170,23 +161,11 @@ onMounted(async () => {
 
         <p v-if="record.scope_note" class="scope-note">{{ record.scope_note }}</p>
 
-        <div v-if="record.references?.length" class="citations">
-          <div v-for="reference in record.references" :key="`${reference.material_id}-${reference.page_no}`" class="citation">
-            <div class="citation-head">
-              <el-tag :type="reference.scope === 'personal' ? 'success' : 'primary'" effect="light" size="small">
-                {{ referenceScopeLabel(reference) }}
-              </el-tag>
-              <strong>{{ reference.title || reference.file_name }}</strong>
-              <span v-if="reference.page_no">第 {{ reference.page_no }} 页</span>
-              <span v-if="scoreText(reference.score)">{{ scoreText(reference.score) }}</span>
-            </div>
-            <small>
-              {{ reference.course_title || reference.knowledge_base_name || '' }}
-              <template v-if="reference.chapter_title">· {{ reference.chapter_title }}</template>
-            </small>
-            <p v-if="reference.snippet">{{ reference.snippet }}</p>
-          </div>
-        </div>
+        <SourceCitations
+          v-if="record.references?.length"
+          class="history-sources"
+          :references="record.references"
+        />
       </article>
 
       <div v-if="!loading && !items.length" class="empty-card em-card">
@@ -345,50 +324,8 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-.citations {
-  display: grid;
-  gap: 8px;
+.history-sources {
   margin: 14px 0 0 36px;
-}
-
-.citation {
-  padding: 10px 12px;
-  border: 1px solid var(--em-border);
-  border-radius: 11px;
-  background: #fbfdff;
-}
-
-.citation-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.citation-head strong {
-  font-size: 13px;
-}
-
-.citation-head span {
-  color: var(--em-text-muted);
-  font-size: 11px;
-}
-
-.citation small {
-  display: block;
-  margin-top: 3px;
-  color: var(--em-text-muted);
-  font-size: 11px;
-}
-
-.citation p {
-  display: -webkit-box;
-  margin-top: 5px;
-  overflow: hidden;
-  color: var(--em-text-secondary);
-  font-size: 12px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .empty-card {
@@ -425,7 +362,7 @@ onMounted(async () => {
   }
 
   .history-meta,
-  .citations,
+  .history-sources,
   .scope-note {
     margin-left: 0;
   }

@@ -102,8 +102,16 @@ describe('QaHistoryView', () => {
     expect(text).toContain('问答记录')
     expect(text).toContain('什么是监督学习？')
     expect(text).toContain('监督学习使用带标签的数据训练模型。')
+    expect(text).toContain('引用来源')
     expect(text).toContain('课程讲义')
     expect(text).toContain('课程知识库')
     expect(text).toContain('人工智能基础入门')
+
+    const toggle = wrapper.find('.sources-toggle')
+    expect(toggle.exists()).toBe(true)
+    expect(wrapper.find('.citations').attributes('style')).toContain('display: none')
+
+    await toggle.trigger('click')
+    expect(wrapper.find('.citations').attributes('style') || '').not.toContain('display: none')
   })
 })

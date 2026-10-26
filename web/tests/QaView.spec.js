@@ -100,9 +100,17 @@ describe('QaView', () => {
     })
     const text = wrapper.text()
     expect(text).toContain('监督学习使用带标签的数据训练模型。')
+    expect(text).toContain('引用来源')
     expect(text).toContain('课程讲义')
     expect(text).toContain('第 3 页')
     expect(text).toContain('已找到依据')
     expect(text).toContain('人工智能基础入门')
+
+    const toggle = wrapper.find('.sources-toggle')
+    expect(toggle.exists()).toBe(true)
+    expect(wrapper.find('.citations').attributes('style')).toContain('display: none')
+
+    await toggle.trigger('click')
+    expect(wrapper.find('.citations').attributes('style') || '').not.toContain('display: none')
   })
 })
