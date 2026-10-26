@@ -79,38 +79,40 @@ onMounted(load)
         <span class="matrix-note">只读视图</span>
       </div>
 
-      <el-table :data="permissions" class="matrix-table">
-        <el-table-column label="权限" min-width="240">
-          <template #default="{ row }">
-            <div class="permission-cell">
-              <strong>{{ row.name }}</strong>
-              <small>{{ row.code }}</small>
-              <span>{{ row.description }}</span>
-            </div>
+      <div class="matrix-scroll">
+        <el-table :data="permissions" class="matrix-table">
+          <el-table-column label="权限" min-width="220">
+            <template #default="{ row }">
+              <div class="permission-cell">
+                <strong>{{ row.name }}</strong>
+                <small>{{ row.code }}</small>
+                <span>{{ row.description }}</span>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column
+            v-for="role in orderedRoles"
+            :key="role.name"
+            :label="roleLabel(role.name)"
+            width="108"
+            align="center"
+          >
+            <template #default="{ row }">
+              <el-icon
+                v-if="role.permissions.includes(row.code)"
+                class="perm-yes"
+                aria-label="已授权"
+              >
+                <CircleCheckFilled />
+              </el-icon>
+              <span v-else class="perm-no">—</span>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty description="暂无权限数据" :image-size="80" />
           </template>
-        </el-table-column>
-        <el-table-column
-          v-for="role in orderedRoles"
-          :key="role.name"
-          :label="roleLabel(role.name)"
-          width="140"
-          align="center"
-        >
-          <template #default="{ row }">
-            <el-icon
-              v-if="role.permissions.includes(row.code)"
-              class="perm-yes"
-              aria-label="已授权"
-            >
-              <CircleCheckFilled />
-            </el-icon>
-            <span v-else class="perm-no">—</span>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <el-empty description="暂无权限数据" :image-size="80" />
-        </template>
-      </el-table>
+        </el-table>
+      </div>
     </section>
   </div>
 </template>
@@ -118,7 +120,10 @@ onMounted(load)
 <style scoped>
 .roles-page {
   display: grid;
+  width: 100%;
+  max-width: 960px;
   gap: 18px;
+  margin: 0 auto;
 }
 
 .summary-chip {
@@ -202,7 +207,19 @@ onMounted(load)
 }
 
 .matrix-card {
+  width: 100%;
+  max-width: 820px;
+  justify-self: center;
   padding: 22px 24px 12px;
+}
+
+.matrix-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.matrix-table {
+  min-width: 560px;
 }
 
 .matrix-head {
@@ -260,6 +277,17 @@ onMounted(load)
 @media (max-width: 1024px) {
   .role-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .roles-page {
+    max-width: none;
+  }
+
+  .matrix-card {
+    max-width: none;
+    justify-self: stretch;
   }
 }
 </style>

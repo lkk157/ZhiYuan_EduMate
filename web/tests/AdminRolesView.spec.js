@@ -87,5 +87,8 @@ describe('AdminRolesView', () => {
     expect(text).toContain('创建、编辑、禁用用户与分配角色')
 
     expect(wrapper.findAll('.perm-yes').length).toBe(3)
+    expect(wrapper.find('.matrix-card').exists()).toBe(true)
+    expect(wrapper.find('.matrix-scroll').exists()).toBe(true)
+    expect(wrapper.find('.matrix-table').exists()).toBe(true)
   })
 })
