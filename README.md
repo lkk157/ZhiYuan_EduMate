@@ -126,6 +126,13 @@ EduMate 使用 `X-API-Key` 鉴权。首次接入时运行：
 | Redis | 6379 |
 | Docker Web（阶段一末） | 8080 |
 
+## 资料在线预览
+
+- 学生可在“学习资料”和章节资料页点击“预览”在线查看资料，无需先下载。
+- PDF 与图片使用浏览器原生预览；DOCX 使用 `docx-preview`、PPTX 使用 `pptx-preview` 在浏览器内解析渲染。
+- 预览接口 `GET /api/v1/materials/{id}/preview` 以 inline 方式返回原文件，并校验课程选课/个人库归属。
+- 预览会记录浏览行为，但**不会增加下载次数**；预览弹窗内可直接下载原文件。
+
 ## 审核机制
 
 - **自动审核（默认开启）**：`AUTO_REVIEW_ENABLED=true`。
