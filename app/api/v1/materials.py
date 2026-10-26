@@ -51,6 +51,7 @@ def _management_view(user: User) -> bool:
 @router.get("")
 async def list_materials(
     course_id: int | None = Query(default=None, ge=1),
+    chapter_id: int | None = Query(default=None, ge=1),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     keyword: str | None = Query(default=None, max_length=100),
@@ -64,11 +65,15 @@ async def list_materials(
     if course_id is not None:
         # Raises 403 for non-owners / students who have not joined, and 403 for
         # students when the course is not approved yet.
-        await course_service.get_accessible_course(db, user, course_id)
+        course = await course_service.get_accessible_course(db, user, course_id)
+        if chapter_id is not None:
+            # 404 when the chapter does not belong to this course.
+            course_service.get_chapter(course, chapter_id)
     items, total = await material_service.list_materials(
         db,
         user,
         course_id=course_id,
+        chapter_id=chapter_id,
         page=page,
         page_size=page_size,
         keyword=keyword,

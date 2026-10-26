@@ -5,21 +5,21 @@ import { ElMessage } from 'element-plus'
 import {
   ArrowLeft,
   Collection,
-  Download,
+  FolderOpened,
   Reading,
+  Right,
   UserFilled,
 } from '@element-plus/icons-vue'
 
 import { getCourse } from '@/api/course'
-import { downloadMaterial, listMaterials } from '@/api/material'
-import { fileTypeLabel, formatFileSize } from '@/utils/material'
+import { listMaterials } from '@/api/material'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
 const course = ref(null)
-const materials = ref([])
+const materialCounts = ref({})
 
 function difficultyType(level) {
   if (level <= 2) return 'success'
@@ -28,12 +28,16 @@ function difficultyType(level) {
   return 'danger'
 }
 
+function chapterMaterialCount(chapterId) {
+  return materialCounts.value[chapterId] || 0
+}
+
 async function load() {
   loading.value = true
   try {
     const body = await getCourse(route.params.id)
     course.value = body?.data || null
-    await loadMaterials()
+    await loadMaterialCounts()
   } catch (error) {
     ElMessage.error(error?.message || '加载课程详情失败')
   } finally {
@@ -41,34 +45,30 @@ async function load() {
   }
 }
 
-async function loadMaterials() {
+async function loadMaterialCounts() {
   if (!course.value) return
   try {
     const body = await listMaterials({
       course_id: course.value.id,
       page_size: 100,
     })
-    materials.value = body?.data?.items || []
+    const counts = {}
+    for (const material of body?.data?.items || []) {
+      if (material.chapter_id) {
+        counts[material.chapter_id] = (counts[material.chapter_id] || 0) + 1
+      }
+    }
+    materialCounts.value = counts
   } catch {
-    materials.value = []
+    materialCounts.value = {}
   }
 }
 
-async function download(material) {
-  try {
-    const blob = await downloadMaterial(material.id)
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = material.source_filename
-    document.body.appendChild(anchor)
-    anchor.click()
-    anchor.remove()
-    URL.revokeObjectURL(url)
-    material.download_count += 1
-  } catch (error) {
-    ElMessage.error(error?.message || '下载资料失败')
-  }
+function openChapter(chapter) {
+  router.push({
+    name: 'student-chapter',
+    params: { courseId: course.value.id, chapterId: chapter.id },
+  })
 }
 
 onMounted(load)
@@ -101,16 +101,31 @@ onMounted(load)
           <span class="em-eyebrow">CURRICULUM</span>
           <h2>课程章节</h2>
         </div>
-        <span class="section-note">学习资料与 AI 问答将在后续阶段接入</span>
+        <span class="section-note">点击章节查看对应学习资料</span>
       </div>
 
       <section v-if="course.chapters.length" class="chapter-list">
-        <article v-for="(chapter, index) in course.chapters" :key="chapter.id" class="chapter-card em-card">
+        <article
+          v-for="(chapter, index) in course.chapters"
+          :key="chapter.id"
+          class="chapter-card em-card"
+          role="button"
+          tabindex="0"
+          @click="openChapter(chapter)"
+          @keyup.enter="openChapter(chapter)"
+        >
           <header>
             <div class="chapter-index">{{ index + 1 }}</div>
-            <div>
+            <div class="chapter-title">
               <h3>{{ chapter.title }}</h3>
               <p>{{ chapter.description || '暂无章节说明' }}</p>
+            </div>
+            <div class="chapter-action">
+              <span class="material-count">
+                <el-icon><FolderOpened /></el-icon>
+                {{ chapterMaterialCount(chapter.id) }} 份资料
+              </span>
+              <el-icon class="chapter-arrow"><Right /></el-icon>
             </div>
           </header>
           <div class="knowledge-list">
@@ -130,34 +145,6 @@ onMounted(load)
       </section>
 
       <el-empty v-else description="课程还没有章节内容" :image-size="100" />
-
-      <div class="section-head material-head">
-        <div>
-          <span class="em-eyebrow">MATERIALS</span>
-          <h2>课程资料</h2>
-        </div>
-        <span class="section-note">{{ materials.length }} 份已发布资料</span>
-      </div>
-
-      <section v-if="materials.length" class="material-grid">
-        <article v-for="material in materials" :key="material.id" class="material-card em-card">
-          <span class="file-badge">{{ fileTypeLabel(material.file_type) }}</span>
-          <div class="material-info">
-            <strong>{{ material.title }}</strong>
-            <small>{{ material.source_filename }}</small>
-            <span>{{ formatFileSize(material.file_size) }} · 下载 {{ material.download_count }}</span>
-          </div>
-          <el-button type="primary" plain :icon="Download" @click="download(material)">
-            下载
-          </el-button>
-        </article>
-      </section>
-
-      <el-empty
-        v-else
-        description="课程暂无已发布资料"
-        :image-size="80"
-      />
     </template>
   </div>
 </template>
@@ -243,12 +230,30 @@ onMounted(load)
 
 .chapter-card {
   padding: 20px 22px;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.chapter-card:hover,
+.chapter-card:focus-visible {
+  border-color: #bcd7ff;
+  box-shadow: 0 12px 30px rgba(22, 119, 255, 0.12);
+  outline: none;
+  transform: translateY(-2px);
 }
 
 .chapter-card header {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+}
+
+.chapter-title {
+  min-width: 0;
+  flex: 1;
 }
 
 .chapter-index {
@@ -271,6 +276,28 @@ onMounted(load)
   margin-top: 2px;
   color: var(--em-text-muted);
   font-size: 12px;
+}
+
+.chapter-action {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.material-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #f1f6fd;
+  color: #5f7796;
+  font-size: 11px;
+}
+
+.chapter-arrow {
+  color: var(--em-primary);
 }
 
 .knowledge-list {
@@ -321,62 +348,6 @@ onMounted(load)
   font-size: 12px;
 }
 
-.material-head {
-  margin-top: 8px;
-}
-
-.material-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.material-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-}
-
-.file-badge {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 auto;
-  place-items: center;
-  border-radius: 12px;
-  background: var(--em-primary-soft);
-  color: var(--em-primary);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.material-info {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  line-height: 1.35;
-}
-
-.material-info strong {
-  font-size: 14px;
-}
-
-.material-info small {
-  overflow: hidden;
-  color: var(--em-text-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.material-info span {
-  margin-top: 2px;
-  color: var(--em-text-muted);
-  font-size: 10px;
-}
-
 @media (max-width: 760px) {
   .hero {
     flex-direction: column;
@@ -386,8 +357,9 @@ onMounted(load)
     padding-left: 0;
   }
 
-  .material-grid {
-    grid-template-columns: 1fr;
+  .chapter-action {
+    flex-direction: column;
+    align-items: flex-end;
   }
 }
 </style>

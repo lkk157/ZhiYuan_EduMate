@@ -42,6 +42,12 @@ const routes = [
         meta: { title: '课程详情' },
       },
       {
+        path: 'courses/:courseId/chapters/:chapterId',
+        name: 'student-chapter',
+        component: () => import('@/views/student/ChapterMaterialsView.vue'),
+        meta: { title: '章节资料' },
+      },
+      {
         path: 'qa',
         component: () => import('@/views/student/QaView.vue'),
         meta: { title: 'AI 学伴问答' },

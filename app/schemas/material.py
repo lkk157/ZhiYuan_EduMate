@@ -38,6 +38,7 @@ def material_out(material: Material, *, management: bool) -> dict:
         "chapter_id": material.chapter_id,
         "chapter_title": material.chapter.title if material.chapter else None,
         "knowledge_id": material.knowledge_id,
+        "knowledge_title": material.knowledge.name if material.knowledge else None,
         "title": material.title,
         "source_filename": material.source_filename,
         "file_type": material.file_type,

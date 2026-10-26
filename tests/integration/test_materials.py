@@ -571,3 +571,63 @@ async def test_batch_upload_rejects_invalid_type_and_too_many_files(client, seed
     )
     assert empty_title_batch.status_code == 201
     assert empty_title_batch.json()["data"]["items"][0]["title"] == "批量单文件标题"
+
+
+async def test_list_materials_filters_by_chapter_for_students(
+    client, seeded, fake_rag, session_factory
+):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    student = await auth_headers(client, "student", seeded["password"])
+    course, chapter_id, knowledge_id = await build_approved_course(
+        client, teacher, admin, "章节资料课程"
+    )
+
+    uploaded = await upload_material(
+        client,
+        teacher,
+        course["id"],
+        chapter_id=chapter_id,
+        knowledge_id=knowledge_id,
+        title="章节内资料",
+    )
+    material_id = uploaded.json()["data"]["id"]
+    await client.post(
+        f"/api/v1/materials/{material_id}/review",
+        headers=admin,
+        json={"decision": "approve"},
+    )
+    await wait_for_index(client, admin, material_id)
+
+    before_join = await client.get(
+        f"/api/v1/materials?course_id={course['id']}&chapter_id={chapter_id}",
+        headers=student,
+    )
+    assert before_join.status_code == 403
+
+    await client.post(
+        "/api/v1/courses/join",
+        headers=student,
+        json={"invite_code": course["invite_code"]},
+    )
+
+    filtered = await client.get(
+        f"/api/v1/materials?course_id={course['id']}&chapter_id={chapter_id}",
+        headers=student,
+    )
+    assert filtered.status_code == 200
+    assert filtered.json()["data"]["total"] == 1
+    assert filtered.json()["data"]["items"][0]["chapter_id"] == chapter_id
+
+    empty = await client.get(
+        f"/api/v1/materials?course_id={course['id']}&chapter_id={chapter_id + 9999}",
+        headers=student,
+    )
+    assert empty.status_code == 404
+
+    _, other_chapter_id, _ = await build_approved_course(client, teacher, admin, "另一门课程")
+    mismatched = await client.get(
+        f"/api/v1/materials?course_id={course['id']}&chapter_id={other_chapter_id}",
+        headers=student,
+    )
+    assert mismatched.status_code == 404

@@ -143,6 +143,7 @@ async def list_materials(
     user: User,
     *,
     course_id: int | None = None,
+    chapter_id: int | None = None,
     page: int = 1,
     page_size: int = 20,
     keyword: str | None = None,
@@ -177,6 +178,8 @@ async def list_materials(
 
     if course_id is not None:
         conditions.append(Material.course_id == course_id)
+    if chapter_id is not None:
+        conditions.append(Material.chapter_id == chapter_id)
     if keyword and keyword.strip():
         pattern = f"%{keyword.strip()}%"
         conditions.append(or_(Material.title.like(pattern), Material.source_filename.like(pattern)))
