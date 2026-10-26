@@ -8,10 +8,12 @@ import {
   Download,
   FolderOpened,
   Reading,
+  View,
 } from '@element-plus/icons-vue'
 
 import { getCourse } from '@/api/course'
 import { downloadMaterial, listMaterials } from '@/api/material'
+import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
 import { fileTypeLabel, formatFileSize } from '@/utils/material'
 
 const route = useRoute()
@@ -20,6 +22,8 @@ const router = useRouter()
 const loading = ref(false)
 const course = ref(null)
 const materials = ref([])
+const previewVisible = ref(false)
+const previewItem = ref(null)
 
 const chapter = computed(() => {
   const chapterId = Number(route.params.chapterId)
@@ -54,6 +58,11 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+function openPreview(material) {
+  previewItem.value = material
+  previewVisible.value = true
 }
 
 async function download(material) {
@@ -144,9 +153,14 @@ onMounted(load)
               {{ material.knowledge_title || '关联知识点' }}
             </span>
           </div>
-          <el-button type="primary" plain :icon="Download" @click="download(material)">
-            下载
-          </el-button>
+          <div class="material-actions">
+            <el-button type="primary" plain :icon="View" @click="openPreview(material)">
+              预览
+            </el-button>
+            <el-button type="primary" plain :icon="Download" @click="download(material)">
+              下载
+            </el-button>
+          </div>
         </article>
       </section>
 
@@ -156,6 +170,8 @@ onMounted(load)
         <p>教师为该章节上传并通过审核的资料会显示在这里。</p>
       </div>
     </template>
+
+    <MaterialPreviewDialog v-model="previewVisible" :material="previewItem" />
   </div>
 </template>
 
@@ -335,6 +351,17 @@ onMounted(load)
 
 .knowledge-tag {
   color: var(--em-primary) !important;
+}
+
+.material-actions {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.material-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .empty-card {

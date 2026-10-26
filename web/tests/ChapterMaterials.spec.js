@@ -11,10 +11,16 @@ vi.mock('@/api/course', () => ({
 vi.mock('@/api/material', () => ({
   listMaterials: vi.fn(),
   downloadMaterial: vi.fn(),
+  previewMaterial: vi.fn(),
+  markMaterialViewed: vi.fn(),
 }))
 
 import { getCourse } from '@/api/course'
-import { listMaterials } from '@/api/material'
+import {
+  listMaterials,
+  markMaterialViewed,
+  previewMaterial,
+} from '@/api/material'
 import CourseDetailView from '@/views/student/CourseDetailView.vue'
 import ChapterMaterialsView from '@/views/student/ChapterMaterialsView.vue'
 
@@ -105,6 +111,12 @@ describe('student course chapters', () => {
   beforeEach(() => {
     getCourse.mockReset()
     listMaterials.mockReset()
+    previewMaterial.mockReset()
+    markMaterialViewed.mockReset()
+    previewMaterial.mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }))
+    markMaterialViewed.mockResolvedValue({ code: 0, data: { view_count: 1 } })
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:preview')
+    globalThis.URL.revokeObjectURL = vi.fn()
     getCourse.mockResolvedValue(coursePayload())
     listMaterials.mockResolvedValue({
       code: 0,
@@ -157,6 +169,16 @@ describe('student course chapters', () => {
     expect(text).toContain('监督学习讲义')
     expect(text).toContain('监督学习')
     expect(text).toContain('1 份已发布资料')
+    expect(text).toContain('预览')
     expect(text).not.toContain('线性回归讲义')
+
+    const previewButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '预览')
+    await previewButton.trigger('click')
+    await flushPromises()
+
+    expect(previewMaterial).toHaveBeenCalledWith(1)
+    expect(markMaterialViewed).toHaveBeenCalledWith(1)
   })
 })

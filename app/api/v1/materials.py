@@ -434,6 +434,25 @@ async def view_material(
     )
 
 
+@router.get("/{material_id}/preview")
+async def preview_material(
+    material_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FileResponse:
+    """Stream the original file inline without counting a download."""
+    material = await material_service.get_material(db, material_id)
+    await material_service.ensure_material_access(db, material, user)
+    path = material_service.material_absolute_path(material)
+    if not path.exists():
+        raise NotFoundError("资料文件不存在")
+    return FileResponse(
+        path=path,
+        media_type=ALLOWED_MATERIAL_SUFFIXES.get(material.file_type),
+        headers={"Content-Disposition": "inline"},
+    )
+
+
 @router.get("/{material_id}/download")
 async def download_material(
     material_id: int,

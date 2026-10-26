@@ -829,3 +829,49 @@ async def test_batch_review_materials(client, seeded, fake_rag):
     assert duplicate.status_code == 200
     assert duplicate.json()["data"]["count"] == 0
     assert len(duplicate.json()["data"]["failed"]) == 2
+
+
+async def test_preview_streams_inline_without_incrementing_downloads(client, seeded, fake_rag):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    student = await auth_headers(client, "student", seeded["password"])
+    course, chapter_id, _ = await build_approved_course(client, teacher, admin, "在线预览课程")
+
+    content = b"%PDF-1.4 preview content"
+    uploaded = await upload_material(
+        client,
+        teacher,
+        course["id"],
+        filename="preview.pdf",
+        title="预览资料",
+        chapter_id=chapter_id,
+        content=content,
+    )
+    material_id = uploaded.json()["data"]["id"]
+    await client.post(
+        f"/api/v1/materials/{material_id}/review",
+        headers=admin,
+        json={"decision": "approve"},
+    )
+    await wait_for_index(client, admin, material_id)
+
+    denied = await client.get(f"/api/v1/materials/{material_id}/preview", headers=student)
+    assert denied.status_code == 403
+
+    await client.post(
+        "/api/v1/courses/join",
+        headers=student,
+        json={"invite_code": course["invite_code"]},
+    )
+
+    preview = await client.get(f"/api/v1/materials/{material_id}/preview", headers=student)
+    assert preview.status_code == 200
+    assert preview.content == content
+    assert preview.headers["content-type"].startswith("application/pdf")
+    assert preview.headers["content-disposition"] == "inline"
+
+    detail = await client.get(f"/api/v1/materials/{material_id}", headers=teacher)
+    assert detail.json()["data"]["download_count"] == 0
+
+    anonymous = await client.get(f"/api/v1/materials/{material_id}/preview")
+    assert anonymous.status_code == 401

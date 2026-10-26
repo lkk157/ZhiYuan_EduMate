@@ -15,11 +15,17 @@ vi.mock('@/api/material', () => ({
   retryMaterialIndex: vi.fn(),
   deleteMaterial: vi.fn(),
   downloadMaterial: vi.fn(),
+  previewMaterial: vi.fn(),
+  markMaterialViewed: vi.fn(),
   fetchRagHealth: vi.fn(),
 }))
 
 import { listCourses } from '@/api/course'
-import { listMaterials } from '@/api/material'
+import {
+  listMaterials,
+  markMaterialViewed,
+  previewMaterial,
+} from '@/api/material'
 import StudentMaterialsView from '@/views/student/MaterialsView.vue'
 
 const MATERIAL = {
@@ -52,6 +58,12 @@ describe('StudentMaterialsView', () => {
   beforeEach(() => {
     listCourses.mockReset()
     listMaterials.mockReset()
+    previewMaterial.mockReset()
+    markMaterialViewed.mockReset()
+    previewMaterial.mockResolvedValue(new Blob(['%PDF-1.4'], { type: 'application/pdf' }))
+    markMaterialViewed.mockResolvedValue({ code: 0, data: { view_count: 1 } })
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:preview')
+    globalThis.URL.revokeObjectURL = vi.fn()
     listCourses.mockResolvedValue({
       code: 0,
       data: {
@@ -78,5 +90,19 @@ describe('StudentMaterialsView', () => {
     expect(text).toContain('PDF')
     expect(text).toContain('8.0 KB')
     expect(text).toContain('下载')
+    expect(text).toContain('预览')
+  })
+
+  it('opens the preview dialog and records a view', async () => {
+    const wrapper = await mountMaterials()
+
+    const previewButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '预览')
+    await previewButton.trigger('click')
+    await flushPromises()
+
+    expect(previewMaterial).toHaveBeenCalledWith(31)
+    expect(markMaterialViewed).toHaveBeenCalledWith(31)
   })
 })

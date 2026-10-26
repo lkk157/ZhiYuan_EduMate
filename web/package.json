@@ -13,8 +13,10 @@
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
     "axios": "^1.20.0",
+    "docx-preview": "^0.4.1",
     "element-plus": "^2.14.7",
     "pinia": "^4.1.0",
+    "pptx-preview": "^1.0.7",
     "vue": "^3.5.44",
     "vue-router": "^5.4.0"
   },

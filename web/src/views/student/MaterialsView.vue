@@ -1,10 +1,11 @@
 <script setup>
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Download, FolderOpened, Search } from '@element-plus/icons-vue'
+import { Download, FolderOpened, Search, View } from '@element-plus/icons-vue'
 
 import { listCourses } from '@/api/course'
 import { downloadMaterial, listMaterials } from '@/api/material'
+import MaterialPreviewDialog from '@/components/MaterialPreviewDialog.vue'
 import { formatDateTime } from '@/utils/format'
 import { fileTypeLabel, formatFileSize } from '@/utils/material'
 
@@ -16,6 +17,8 @@ const pageSize = ref(12)
 const courses = ref([])
 const courseFilter = ref('')
 const keyword = ref('')
+const previewVisible = ref(false)
+const previewItem = ref(null)
 
 async function loadCourses() {
   try {
@@ -47,6 +50,11 @@ async function load() {
 function search() {
   page.value = 1
   load()
+}
+
+function openPreview(row) {
+  previewItem.value = row
+  previewVisible.value = true
 }
 
 async function download(row) {
@@ -148,8 +156,11 @@ onMounted(async () => {
             <span class="time-text">{{ formatDateTime(row.created_at) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="110" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" :icon="View" @click="openPreview(row)">
+              预览
+            </el-button>
             <el-button link type="primary" :icon="Download" @click="download(row)">
               下载
             </el-button>
@@ -174,6 +185,8 @@ onMounted(async () => {
         />
       </div>
     </section>
+
+    <MaterialPreviewDialog v-model="previewVisible" :material="previewItem" />
   </div>
 </template>
 
