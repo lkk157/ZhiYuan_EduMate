@@ -393,3 +393,19 @@ async def test_admin_stats_returns_user_and_audit_totals(client, seeded):
     student_headers = await auth_headers(client, "student", seeded["password"])
     forbidden = await client.get("/api/v1/admin/stats", headers=student_headers)
     assert forbidden.status_code == 403
+
+
+async def test_review_policy_exposes_auto_review_rules(client, seeded):
+    headers = await auth_headers(client, "admin", seeded["password"])
+    policy = await client.get("/api/v1/admin/review-policy", headers=headers)
+
+    assert policy.status_code == 200
+    data = policy.json()["data"]
+    # Tests run with auto review disabled to exercise the manual queue.
+    assert data["auto_review_enabled"] is False
+    assert len(data["course_rules"]) >= 3
+    assert any("PDF" in rule for rule in data["material_rules"])
+
+    student_headers = await auth_headers(client, "student", seeded["password"])
+    denied = await client.get("/api/v1/admin/review-policy", headers=student_headers)
+    assert denied.status_code == 403

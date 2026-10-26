@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_permission
+from app.core.config import get_settings
 from app.core.errors import success
 from app.db.models.rbac import User
 from app.db.session import get_db
@@ -28,6 +29,28 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/ping")
 async def ping(user: User = Depends(require_permission("user:manage"))) -> dict:
     return success({"pong": True, "operator": user.username})
+
+
+@router.get("/review-policy")
+async def review_policy(
+    user: User = Depends(require_permission("course:review")),
+) -> dict:
+    settings = get_settings()
+    return success(
+        {
+            "auto_review_enabled": settings.auto_review_enabled,
+            "course_rules": [
+                "课程简介非空",
+                "至少包含 1 个章节和 1 个知识点",
+                "章节标题不重复",
+            ],
+            "material_rules": [
+                "课程已发布且资料关联章节",
+                "支持 PDF / DOCX / PPTX 自动审核",
+                "图片资料仍需人工审核",
+            ],
+        }
+    )
 
 
 @router.get("/stats")

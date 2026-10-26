@@ -3,18 +3,28 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import * as ElementPlusIcons from '@element-plus/icons-vue'
 
+vi.mock('@/api/admin', () => ({
+  fetchReviewPolicy: vi.fn(),
+}))
+
 vi.mock('@/api/material', () => ({
   listMaterials: vi.fn(),
   getMaterial: vi.fn(),
   uploadMaterial: vi.fn(),
   reviewMaterial: vi.fn(),
+  batchReviewMaterials: vi.fn(),
   retryMaterialIndex: vi.fn(),
   deleteMaterial: vi.fn(),
   downloadMaterial: vi.fn(),
   fetchRagHealth: vi.fn(),
 }))
 
-import { getMaterial, listMaterials } from '@/api/material'
+import { fetchReviewPolicy } from '@/api/admin'
+import {
+  batchReviewMaterials,
+  getMaterial,
+  listMaterials,
+} from '@/api/material'
 import AdminMaterialReviewsView from '@/views/admin/MaterialReviewsView.vue'
 
 const MATERIAL = {
@@ -53,6 +63,21 @@ describe('AdminMaterialReviewsView', () => {
   beforeEach(() => {
     listMaterials.mockReset()
     getMaterial.mockReset()
+    fetchReviewPolicy.mockReset()
+    batchReviewMaterials.mockReset()
+    fetchReviewPolicy.mockResolvedValue({
+      code: 0,
+      data: {
+        auto_review_enabled: true,
+        course_rules: ['课程简介非空'],
+        material_rules: ['课程已发布且资料关联章节', '支持 PDF / DOCX / PPTX 自动审核'],
+      },
+    })
+    batchReviewMaterials.mockResolvedValue({
+      code: 0,
+      message: '已通过 1 份资料，正在后台索引',
+      data: { succeeded: [{ id: 21 }], failed: [], count: 1 },
+    })
     listMaterials.mockResolvedValue({
       code: 0,
       data: { items: [MATERIAL], total: 1, page: 1, page_size: 10 },
@@ -72,6 +97,9 @@ describe('AdminMaterialReviewsView', () => {
     expect(text).toContain('数据结构与算法')
     expect(text).toContain('teacher')
     expect(text).toContain('待审核')
+    expect(text).toContain('自动审核已启用')
+    expect(text).toContain('批量通过')
+    expect(text).toContain('批量驳回')
 
     const reviewButton = wrapper
       .findAll('button')

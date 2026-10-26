@@ -24,8 +24,10 @@ from app.core.config import get_settings
 from app.core.errors import AppError, NotFoundError, ValidationError, success
 from app.db.models.material import (
     ALLOWED_MATERIAL_SUFFIXES,
+    INDEX_STATUS_PENDING,
     INDEX_STATUSES,
     MATERIAL_SCOPE_PERSONAL,
+    MATERIAL_STATUS_APPROVED,
     MATERIAL_STATUSES,
 )
 from app.db.models.rbac import ROLE_ADMIN, ROLE_TEACHER, User
@@ -35,6 +37,7 @@ from app.schemas.material import (
     MaterialReviewRequest,
     material_list_out,
 )
+from app.schemas.review import BatchReviewRequest
 from app.services import course_service, material_service
 from app.services.audit_service import client_ip
 from app.services.material_service import index_material
@@ -106,6 +109,7 @@ async def rag_health(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def upload_material(
     request: Request,
+    background_tasks: BackgroundTasks,
     course_id: int = Form(...),
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
@@ -113,6 +117,8 @@ async def upload_material(
     knowledge_id: int | None = Form(default=None),
     user: User = Depends(require_permission("material:upload")),
     db: AsyncSession = Depends(get_db),
+    session_factory: async_sessionmaker = Depends(get_session_factory),
+    rag_client: RagClient = Depends(get_rag_client),
 ) -> dict:
     course = await course_service.get_accessible_course(db, user, course_id, for_management=True)
     material = await material_service.create_material(
@@ -125,12 +131,20 @@ async def upload_material(
         knowledge_id=knowledge_id,
         ip=client_ip(request),
     )
-    return success(material_list_out(material, management=True), "资料已上传，等待管理员审核")
+    auto_approved = (
+        material.status == MATERIAL_STATUS_APPROVED
+        and material.index_status == INDEX_STATUS_PENDING
+    )
+    if auto_approved:
+        background_tasks.add_task(index_material, material.id, session_factory, rag_client)
+    message = "资料已自动审核通过，正在后台索引" if auto_approved else "资料已上传，等待管理员审核"
+    return success(material_list_out(material, management=True), message)
 
 
 @router.post("/batch", status_code=status.HTTP_201_CREATED)
 async def upload_materials_batch(
     request: Request,
+    background_tasks: BackgroundTasks,
     course_id: int = Form(...),
     files: list[UploadFile] = File(...),
     title: str | None = Form(default=None),
@@ -138,6 +152,8 @@ async def upload_materials_batch(
     knowledge_id: int | None = Form(default=None),
     user: User = Depends(require_permission("material:upload")),
     db: AsyncSession = Depends(get_db),
+    session_factory: async_sessionmaker = Depends(get_session_factory),
+    rag_client: RagClient = Depends(get_rag_client),
 ) -> dict:
     if not files:
         raise ValidationError("请选择要上传的资料文件")
@@ -187,6 +203,7 @@ async def upload_materials_batch(
     shared_title = title.strip() if title and title.strip() else None
     items = []
     errors = []
+    auto_ids: list[int] = []
     for index, upload in enumerate(files):
         filename = upload.filename or ""
         try:
@@ -203,6 +220,11 @@ async def upload_materials_batch(
                 ip=client_ip(request),
             )
             items.append(material_list_out(material, management=True))
+            if (
+                material.status == MATERIAL_STATUS_APPROVED
+                and material.index_status == INDEX_STATUS_PENDING
+            ):
+                auto_ids.append(material.id)
         except AppError as exc:
             await db.rollback()
             errors.append({"filename": filename, "code": exc.code, "message": exc.message})
@@ -238,8 +260,13 @@ async def upload_materials_batch(
         message = errors[0]["message"] if errors else "资料上传失败"
         raise ValidationError(message, data={"errors": errors})
 
+    for material_id in auto_ids:
+        background_tasks.add_task(index_material, material_id, session_factory, rag_client)
+
     if errors:
         message = f"成功上传 {len(items)} 个资料，{len(errors)} 个失败"
+    elif auto_ids:
+        message = f"成功上传 {len(items)} 个资料并自动审核通过，正在后台索引"
     else:
         message = f"成功上传 {len(items)} 个资料，等待管理员审核"
     return success(
@@ -248,7 +275,57 @@ async def upload_materials_batch(
             "succeeded": len(items),
             "failed": len(errors),
             "errors": errors,
+            "auto_approved": len(auto_ids),
         },
+        message,
+    )
+
+
+@router.post("/batch/review")
+async def batch_review_materials(
+    body: BatchReviewRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+    reviewer: User = Depends(require_permission("material:review")),
+    db: AsyncSession = Depends(get_db),
+    session_factory: async_sessionmaker = Depends(get_session_factory),
+    rag_client: RagClient = Depends(get_rag_client),
+) -> dict:
+    succeeded: list[dict] = []
+    errors: list[dict] = []
+    approved_ids: list[int] = []
+    for material_id in body.ids:
+        try:
+            material = await material_service.get_material(db, material_id)
+            reviewed = await material_service.review_material(
+                db,
+                reviewer,
+                material,
+                decision=body.decision,
+                comment=body.comment,
+                ip=client_ip(request),
+            )
+            succeeded.append({"id": reviewed.id, "title": reviewed.title})
+            if body.decision == "approve":
+                approved_ids.append(reviewed.id)
+        except AppError as exc:
+            await db.rollback()
+            errors.append({"id": material_id, "code": exc.code, "message": exc.message})
+        except Exception:  # noqa: BLE001 - batch keeps processing after one failure
+            await db.rollback()
+            errors.append({"id": material_id, "code": 5000, "message": "审核失败，请重试"})
+
+    for material_id in approved_ids:
+        background_tasks.add_task(index_material, material_id, session_factory, rag_client)
+
+    action = "通过" if body.decision == "approve" else "驳回"
+    message = f"已{action} {len(succeeded)} 份资料"
+    if errors:
+        message += f"，{len(errors)} 份失败"
+    if approved_ids:
+        message += "，正在后台索引"
+    return success(
+        {"succeeded": succeeded, "failed": errors, "count": len(succeeded)},
         message,
     )
 

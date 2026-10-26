@@ -53,6 +53,7 @@ class Settings(BaseSettings):
 
     upload_dir: str = "./data/uploads"
     max_upload_mb: int = 200
+    auto_review_enabled: bool = True
     seed_demo_password: str = "EduMate@2026"
 
     @model_validator(mode="after")

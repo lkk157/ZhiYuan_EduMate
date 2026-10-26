@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.core.config import get_settings
+
 
 async def login(client, username: str, password: str):
     return await client.post(
@@ -541,3 +543,83 @@ async def test_course_permission_guards_and_audit_trail(client, seeded):
 
     filtered = await client.get("/api/v1/admin/audit-logs?action=course.approve", headers=admin)
     assert filtered.json()["data"]["total"] == 1
+
+
+async def test_auto_review_publishes_complete_course_and_holds_incomplete(
+    client, seeded, monkeypatch
+):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    student = await auth_headers(client, "student", seeded["password"])
+    monkeypatch.setattr(get_settings(), "auto_review_enabled", True)
+
+    created = await create_course(client, teacher, title="自动审核课程")
+    course_id = created.json()["data"]["id"]
+    chapter = await add_chapter(client, teacher, course_id, "第一章 自动审核")
+    chapter_id = chapter.json()["data"]["id"]
+    await add_knowledge(client, teacher, course_id, chapter_id, "自动审核知识点")
+
+    submitted = await client.post(f"/api/v1/courses/{course_id}/submit", headers=teacher)
+    assert submitted.status_code == 200, submitted.text
+    assert submitted.json()["message"] == "课程符合自动审核规则，已直接发布"
+    detail = submitted.json()["data"]
+    assert detail["status"] == "approved"
+    assert detail["review_comment"] == "系统自动审核通过"
+
+    joined = await client.post(
+        "/api/v1/courses/join",
+        headers=student,
+        json={"invite_code": detail["invite_code"]},
+    )
+    assert joined.status_code == 200
+
+    incomplete = await create_course(client, teacher, title="缺少章节的课程")
+    incomplete_id = incomplete.json()["data"]["id"]
+    pending = await client.post(f"/api/v1/courses/{incomplete_id}/submit", headers=teacher)
+    assert pending.status_code == 200
+    assert pending.json()["data"]["status"] == "pending"
+    assert pending.json()["data"]["review_comment"] is None
+
+
+async def test_batch_review_courses(client, seeded):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+
+    course_ids = []
+    for index in range(2):
+        created = await create_course(client, teacher, title=f"批量审核课程 {index}")
+        course_id = created.json()["data"]["id"]
+        chapter = await add_chapter(client, teacher, course_id, f"第{index}章")
+        await add_knowledge(
+            client, teacher, course_id, chapter.json()["data"]["id"], f"知识点 {index}"
+        )
+        await client.post(f"/api/v1/courses/{course_id}/submit", headers=teacher)
+        course_ids.append(course_id)
+
+    missing_comment = await client.post(
+        "/api/v1/courses/batch/review",
+        headers=admin,
+        json={"ids": course_ids, "decision": "reject"},
+    )
+    assert missing_comment.status_code == 422
+
+    approved = await client.post(
+        "/api/v1/courses/batch/review",
+        headers=admin,
+        json={"ids": course_ids, "decision": "approve", "comment": "批量通过"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["data"]["count"] == 2
+    assert approved.json()["data"]["failed"] == []
+
+    for course_id in course_ids:
+        detail = await client.get(f"/api/v1/courses/{course_id}", headers=admin)
+        assert detail.json()["data"]["status"] == "approved"
+
+    duplicate = await client.post(
+        "/api/v1/courses/batch/review",
+        headers=admin,
+        json={"ids": course_ids, "decision": "approve"},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["data"]["count"] == 0
+    assert len(duplicate.json()["data"]["failed"]) == 2

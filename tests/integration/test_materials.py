@@ -728,3 +728,104 @@ async def test_list_materials_filters_by_chapter_for_students(
         headers=student,
     )
     assert mismatched.status_code == 404
+
+
+async def test_auto_review_approves_document_and_holds_risky_uploads(
+    client, seeded, fake_rag, monkeypatch
+):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    course, chapter_id, knowledge_id = await build_approved_course(
+        client, teacher, admin, "自动审核资料课程"
+    )
+    monkeypatch.setattr(get_settings(), "auto_review_enabled", True)
+
+    auto = await upload_material(
+        client,
+        teacher,
+        course["id"],
+        filename="auto.pdf",
+        title="自动审核讲义",
+        chapter_id=chapter_id,
+        knowledge_id=knowledge_id,
+    )
+    assert auto.status_code == 201, auto.text
+    assert auto.json()["message"] == "资料已自动审核通过，正在后台索引"
+    assert auto.json()["data"]["status"] == "approved"
+    assert auto.json()["data"]["review_comment"] == "系统自动审核通过"
+    material_id = auto.json()["data"]["id"]
+    indexed = await wait_for_index(client, admin, material_id)
+    assert indexed.json()["data"]["index_status"] == "indexed"
+
+    image = await upload_material(
+        client,
+        teacher,
+        course["id"],
+        filename="diagram.png",
+        content=b"\x89PNG\r\n\x1a\nimage",
+        content_type="image/png",
+        title="图片资料",
+        chapter_id=chapter_id,
+    )
+    assert image.status_code == 201
+    assert image.json()["data"]["status"] == "pending"
+
+    no_chapter = await upload_material(
+        client,
+        teacher,
+        course["id"],
+        filename="loose.pdf",
+        title="未关联章节资料",
+    )
+    assert no_chapter.status_code == 201
+    assert no_chapter.json()["data"]["status"] == "pending"
+
+
+async def test_batch_review_materials(client, seeded, fake_rag):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    course, chapter_id, _ = await build_approved_course(client, teacher, admin, "批量审核资料课程")
+
+    material_ids = []
+    for index in range(2):
+        uploaded = await upload_material(
+            client,
+            teacher,
+            course["id"],
+            filename=f"batch-{index}.pdf",
+            title=f"批量资料 {index}",
+            chapter_id=chapter_id,
+        )
+        assert uploaded.status_code == 201
+        assert uploaded.json()["data"]["status"] == "pending"
+        material_ids.append(uploaded.json()["data"]["id"])
+
+    missing_comment = await client.post(
+        "/api/v1/materials/batch/review",
+        headers=admin,
+        json={"ids": material_ids, "decision": "reject"},
+    )
+    assert missing_comment.status_code == 422
+
+    approved = await client.post(
+        "/api/v1/materials/batch/review",
+        headers=admin,
+        json={"ids": material_ids, "decision": "approve", "comment": "批量通过"},
+    )
+    assert approved.status_code == 200, approved.text
+    assert approved.json()["data"]["count"] == 2
+    assert approved.json()["data"]["failed"] == []
+
+    for material_id in material_ids:
+        indexed = await wait_for_index(client, admin, material_id)
+        assert indexed.json()["data"]["status"] == "approved"
+        assert indexed.json()["data"]["index_status"] == "indexed"
+
+    duplicate = await client.post(
+        "/api/v1/materials/batch/review",
+        headers=admin,
+        json={"ids": material_ids, "decision": "approve"},
+    )
+    assert duplicate.status_code == 200
+    assert duplicate.json()["data"]["count"] == 0
+    assert len(duplicate.json()["data"]["failed"]) == 2

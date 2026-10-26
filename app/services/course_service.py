@@ -10,6 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import get_settings
 from app.core.errors import (
     ConflictError,
     ForbiddenError,
@@ -35,6 +36,7 @@ from app.db.models.course import (
 from app.db.models.rbac import ROLE_ADMIN, ROLE_STUDENT, ROLE_TEACHER, User
 from app.services.audit_service import (
     ACTION_COURSE_APPROVE,
+    ACTION_COURSE_AUTO_APPROVE,
     ACTION_COURSE_CREATE,
     ACTION_COURSE_INVITE_ROTATE,
     ACTION_COURSE_INVITE_TOGGLE,
@@ -58,6 +60,31 @@ COURSE_LOAD = (
     selectinload(Course.chapters).selectinload(Chapter.knowledges),
     selectinload(Course.enrollments).selectinload(CourseEnrollment.student),
 )
+
+AUTO_REVIEW_COMMENT = "系统自动审核通过"
+
+
+def course_auto_review_issue(course: Course) -> str | None:
+    """Return why a course needs manual review, or ``None`` when safe."""
+    if not get_settings().auto_review_enabled:
+        return "自动审核未启用"
+    if not (course.description or "").strip():
+        return "课程简介不能为空"
+    if not course.chapters:
+        return "至少需要一个章节"
+    titles: set[str] = set()
+    knowledge_total = 0
+    for chapter in course.chapters:
+        title = (chapter.title or "").strip()
+        if not title:
+            return "章节标题不能为空"
+        if title.lower() in titles:
+            return "章节标题不能重复"
+        titles.add(title.lower())
+        knowledge_total += len(chapter.knowledges)
+    if knowledge_total == 0:
+        return "至少需要一个知识点"
+    return None
 
 
 async def get_course(db: AsyncSession, course_id: int) -> Course:
@@ -233,16 +260,29 @@ async def submit_course(
 ) -> Course:
     if course.status not in COURSE_SUBMITTABLE_STATUSES:
         raise ConflictError("当前状态的课程无需提交审核")
-    course.status = COURSE_STATUS_PENDING
+
+    issue = course_auto_review_issue(course)
+    auto_approved = issue is None
     course.submitted_at = utc_now()
-    course.review_comment = None
+    if auto_approved:
+        course.status = COURSE_STATUS_APPROVED
+        course.review_comment = AUTO_REVIEW_COMMENT
+        course.reviewed_by = None
+        course.reviewed_at = utc_now()
+    else:
+        course.status = COURSE_STATUS_PENDING
+        course.review_comment = None
     await record_audit(
         db,
-        action=ACTION_COURSE_SUBMIT,
+        action=ACTION_COURSE_AUTO_APPROVE if auto_approved else ACTION_COURSE_SUBMIT,
         actor=actor,
         target_type="course",
         target_id=course.id,
-        detail={"title": course.title},
+        detail={
+            "title": course.title,
+            "auto_review": auto_approved,
+            **({"manual_reason": issue} if issue else {}),
+        },
         ip=ip,
     )
     await db.commit()

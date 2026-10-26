@@ -4,6 +4,10 @@ export function fetchAdminStats() {
   return http.get('/admin/stats')
 }
 
+export function fetchReviewPolicy() {
+  return http.get('/admin/review-policy')
+}
+
 export function listUsers(params) {
   return http.get('/admin/users', { params })
 }

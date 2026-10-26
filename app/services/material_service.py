@@ -46,6 +46,7 @@ from app.db.models.material import (
 from app.db.models.rbac import ROLE_ADMIN, ROLE_STUDENT, ROLE_TEACHER, User
 from app.services.audit_service import (
     ACTION_MATERIAL_APPROVE,
+    ACTION_MATERIAL_AUTO_APPROVE,
     ACTION_MATERIAL_DELETE,
     ACTION_MATERIAL_INDEX_RETRY,
     ACTION_MATERIAL_MAPPING,
@@ -68,6 +69,32 @@ MATERIAL_LOAD = (
 
 CHUNK_SIZE = 1024 * 1024
 MAX_BATCH_FILES = 10
+AUTO_REVIEW_COMMENT = "系统自动审核通过"
+AUTO_REVIEW_SUFFIXES = {".pdf", ".docx", ".pptx"}
+
+
+def material_auto_review_issue(
+    *,
+    course: Course | None,
+    chapter: Chapter | None,
+    file_type: str,
+    file_size: int,
+    title: str,
+) -> str | None:
+    """Return why a material needs manual review, or ``None`` when safe."""
+    if not get_settings().auto_review_enabled:
+        return "自动审核未启用"
+    if course is None or course.status != COURSE_STATUS_APPROVED:
+        return "课程未发布"
+    if chapter is None:
+        return "资料未关联章节"
+    if file_type not in AUTO_REVIEW_SUFFIXES:
+        return "图片资料需人工审核"
+    if file_size <= 0:
+        return "文件内容为空"
+    if len((title or "").strip()) < 2:
+        return "资料标题过短"
+    return None
 
 
 def sanitize_filename(filename: str, fallback: str = "material") -> str:
@@ -304,6 +331,21 @@ async def create_material(
     material.rag_filename = rag_filename
     material.file_path = relative.as_posix()
     material.file_size = size
+
+    auto_issue: str | None = None
+    if not personal:
+        auto_issue = material_auto_review_issue(
+            course=course,
+            chapter=chapter,
+            file_type=suffix,
+            file_size=size,
+            title=material_title,
+        )
+        if auto_issue is None:
+            material.status = MATERIAL_STATUS_APPROVED
+            material.review_comment = AUTO_REVIEW_COMMENT
+            material.reviewed_at = utc_now()
+
     await record_audit(
         db,
         action=ACTION_MATERIAL_UPLOAD,
@@ -317,9 +359,24 @@ async def create_material(
             "knowledge_base": knowledge_base.name if knowledge_base is not None else None,
             "filename": material.source_filename,
             "size": size,
+            "auto_review_issue": auto_issue,
         },
         ip=ip,
     )
+    if not personal and auto_issue is None:
+        await record_audit(
+            db,
+            action=ACTION_MATERIAL_AUTO_APPROVE,
+            actor=uploader,
+            target_type="material",
+            target_id=material.id,
+            detail={
+                "title": material.title,
+                "course": course.title if course is not None else None,
+                "auto_review": True,
+            },
+            ip=ip,
+        )
     try:
         await db.commit()
     except Exception:

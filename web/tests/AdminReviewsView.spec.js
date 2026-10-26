@@ -3,6 +3,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import * as ElementPlusIcons from '@element-plus/icons-vue'
 
+vi.mock('@/api/admin', () => ({
+  fetchReviewPolicy: vi.fn(),
+}))
+
 vi.mock('@/api/course', () => ({
   listCourses: vi.fn(),
   createCourse: vi.fn(),
@@ -10,6 +14,7 @@ vi.mock('@/api/course', () => ({
   submitCourse: vi.fn(),
   getCourse: vi.fn(),
   reviewCourse: vi.fn(),
+  batchReviewCourses: vi.fn(),
   joinCourse: vi.fn(),
   listCourseStudents: vi.fn(),
   addStudent: vi.fn(),
@@ -24,7 +29,8 @@ vi.mock('@/api/course', () => ({
   deleteKnowledge: vi.fn(),
 }))
 
-import { getCourse, listCourses } from '@/api/course'
+import { fetchReviewPolicy } from '@/api/admin'
+import { batchReviewCourses, getCourse, listCourses } from '@/api/course'
 import AdminReviewsView from '@/views/admin/ReviewsView.vue'
 
 const PENDING_COURSE = {
@@ -55,6 +61,21 @@ describe('AdminReviewsView', () => {
   beforeEach(() => {
     listCourses.mockReset()
     getCourse.mockReset()
+    fetchReviewPolicy.mockReset()
+    batchReviewCourses.mockReset()
+    fetchReviewPolicy.mockResolvedValue({
+      code: 0,
+      data: {
+        auto_review_enabled: true,
+        course_rules: ['课程简介非空', '至少包含 1 个章节和 1 个知识点'],
+        material_rules: ['课程已发布且资料关联章节'],
+      },
+    })
+    batchReviewCourses.mockResolvedValue({
+      code: 0,
+      message: '已通过 1 门课程',
+      data: { succeeded: [{ id: 7 }], failed: [], count: 1 },
+    })
     listCourses.mockResolvedValue({
       code: 0,
       message: 'ok',
@@ -92,6 +113,9 @@ describe('AdminReviewsView', () => {
     expect(text).toContain('teacher')
     expect(text).toContain('待审核')
     expect(text).toContain('2 章 · 6 知识点')
+    expect(text).toContain('自动审核已启用')
+    expect(text).toContain('批量通过')
+    expect(text).toContain('批量驳回')
 
     const reviewButton = wrapper
       .findAll('button')

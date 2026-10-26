@@ -10,6 +10,9 @@ from sqlalchemy.pool import StaticPool
 
 os.environ.setdefault("APP_ENV", "test")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-with-more-than-32-characters")
+# Existing workflow tests assert the manual review queue; auto-review tests
+# enable the feature explicitly.
+os.environ["AUTO_REVIEW_ENABLED"] = "false"
 
 from app.core.config import get_settings  # noqa: E402
 from app.db import models  # noqa: E402,F401  (register tables on Base.metadata)

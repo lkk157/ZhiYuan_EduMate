@@ -24,6 +24,10 @@ export function reviewCourse(courseId, payload) {
   return http.post(`/courses/${courseId}/review`, payload)
 }
 
+export function batchReviewCourses(payload) {
+  return http.post('/courses/batch/review', payload)
+}
+
 export function rotateInvite(courseId) {
   return http.post(`/courses/${courseId}/invite/rotate`)
 }

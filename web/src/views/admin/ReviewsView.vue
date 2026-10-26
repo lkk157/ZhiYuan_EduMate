@@ -3,7 +3,8 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search } from '@element-plus/icons-vue'
 
-import { getCourse, listCourses, reviewCourse } from '@/api/course'
+import { fetchReviewPolicy } from '@/api/admin'
+import { batchReviewCourses, getCourse, listCourses, reviewCourse } from '@/api/course'
 import { COURSE_STATUS_META, courseStatusLabel, courseStatusType } from '@/utils/course'
 import { formatDateTime } from '@/utils/format'
 
@@ -20,6 +21,11 @@ const detailLoading = ref(false)
 const detail = ref(null)
 const reviewComment = ref('')
 const reviewing = ref(false)
+
+const policy = ref(null)
+const selectedCourses = ref([])
+const batchComment = ref('')
+const batchLoading = ref(false)
 
 const statusOptions = Object.entries(COURSE_STATUS_META).map(([value, meta]) => ({
   value,
@@ -117,7 +123,67 @@ async function submitReview(decision) {
   }
 }
 
-onMounted(load)
+const tableRef = ref()
+
+async function loadPolicy() {
+  try {
+    const body = await fetchReviewPolicy()
+    policy.value = body?.data || null
+  } catch {
+    policy.value = null
+  }
+}
+
+function onSelectionChange(rows) {
+  selectedCourses.value = rows
+}
+
+function selectableCourse(row) {
+  return row.status === 'pending'
+}
+
+async function runBatch(decision) {
+  if (!selectedCourses.value.length) {
+    ElMessage.warning('请先勾选待审核课程')
+    return
+  }
+  if (decision === 'reject' && !batchComment.value.trim()) {
+    ElMessage.warning('批量驳回时必须填写审核意见')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确定批量${decision === 'approve' ? '通过' : '驳回'} ${selectedCourses.value.length} 门课程吗？`,
+      '批量审核',
+      { type: 'warning', confirmButtonText: '确定', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  batchLoading.value = true
+  try {
+    const body = await batchReviewCourses({
+      ids: selectedCourses.value.map((course) => course.id),
+      decision,
+      comment: batchComment.value.trim() || null,
+    })
+    const failed = body?.data?.failed?.length || 0
+    if (failed) ElMessage.warning(body.message || '部分课程审核失败')
+    else ElMessage.success(body.message || '批量审核完成')
+    batchComment.value = ''
+    tableRef.value?.clearSelection()
+    await load()
+  } catch (error) {
+    ElMessage.error(error?.message || '批量审核失败')
+  } finally {
+    batchLoading.value = false
+  }
+}
+
+onMounted(() => {
+  load()
+  loadPolicy()
+})
 </script>
 
 <template>
@@ -133,6 +199,18 @@ onMounted(load)
         <span>待审核</span>
       </div>
     </div>
+
+    <section
+      v-if="policy"
+      class="review-policy em-card"
+      :class="{ 'policy-off': !policy.auto_review_enabled }"
+    >
+      <strong>{{ policy.auto_review_enabled ? '自动审核已启用' : '自动审核已关闭' }}</strong>
+      <span v-if="policy.auto_review_enabled">
+        课程满足「{{ policy.course_rules.join('、') }}」时自动发布，其余进入待审核队列。
+      </span>
+      <span v-else>所有课程提交均需人工审核。</span>
+    </section>
 
     <section class="filter-card em-card">
       <div class="filter-row">
@@ -159,7 +237,42 @@ onMounted(load)
     </section>
 
     <section class="table-card em-card">
-      <el-table v-loading="loading" :data="courses">
+      <div class="batch-bar">
+        <span class="batch-count">已选 {{ selectedCourses.length }} 门待审核课程</span>
+        <el-input
+          v-model="batchComment"
+          class="batch-comment"
+          placeholder="批量驳回意见（驳回必填）"
+          maxlength="500"
+          clearable
+        />
+        <el-button
+          type="success"
+          plain
+          :disabled="!selectedCourses.length"
+          :loading="batchLoading"
+          @click="runBatch('approve')"
+        >
+          批量通过
+        </el-button>
+        <el-button
+          type="danger"
+          plain
+          :disabled="!selectedCourses.length"
+          :loading="batchLoading"
+          @click="runBatch('reject')"
+        >
+          批量驳回
+        </el-button>
+      </div>
+
+      <el-table
+        ref="tableRef"
+        v-loading="loading"
+        :data="courses"
+        @selection-change="onSelectionChange"
+      >
+        <el-table-column type="selection" width="46" :selectable="selectableCourse" />
         <el-table-column label="课程" min-width="260">
           <template #default="{ row }">
             <div class="course-cell">
@@ -320,6 +433,49 @@ onMounted(load)
 .pending-chip span {
   color: var(--em-text-muted);
   font-size: 12px;
+}
+
+.review-policy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 13px 18px;
+  border-left: 3px solid #22c55e;
+  background: #f4fdf8;
+  color: #3f6250;
+  font-size: 12px;
+}
+
+.review-policy strong {
+  color: #15803d;
+  font-size: 13px;
+}
+
+.review-policy.policy-off {
+  border-left-color: #f59e0b;
+  background: #fffaf0;
+  color: #7c632f;
+}
+
+.review-policy.policy-off strong {
+  color: #b45309;
+}
+
+.batch-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 14px;
+}
+
+.batch-count {
+  color: var(--em-text-muted);
+  font-size: 12px;
+}
+
+.batch-comment {
+  width: 260px;
 }
 
 .filter-card {
@@ -524,7 +680,8 @@ onMounted(load)
 
 @media (max-width: 760px) {
   .keyword-input,
-  .status-select {
+  .status-select,
+  .batch-comment {
     width: 100%;
   }
 

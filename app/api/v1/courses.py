@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_permission, require_role
-from app.core.errors import success
-from app.db.models.course import COURSE_STATUSES
+from app.core.errors import AppError, success
+from app.db.models.course import COURSE_STATUS_APPROVED, COURSE_STATUSES
 from app.db.models.rbac import ROLE_STUDENT, User
 from app.db.session import get_db
 from app.schemas.course import (
@@ -26,6 +26,7 @@ from app.schemas.course import (
     enrollment_student_out,
     knowledge_out,
 )
+from app.schemas.review import BatchReviewRequest
 from app.services import course_service
 from app.services.audit_service import client_ip
 
@@ -105,6 +106,44 @@ async def create_course(
     return success(course_out(course, include_invite=True), "课程创建成功")
 
 
+@router.post("/batch/review")
+async def batch_review_courses(
+    body: BatchReviewRequest,
+    request: Request,
+    reviewer: User = Depends(require_permission("course:review")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    succeeded: list[dict] = []
+    errors: list[dict] = []
+    for course_id in body.ids:
+        try:
+            course = await course_service.get_course(db, course_id)
+            reviewed = await course_service.review_course(
+                db,
+                reviewer,
+                course,
+                decision=body.decision,
+                comment=body.comment,
+                ip=client_ip(request),
+            )
+            succeeded.append({"id": reviewed.id, "title": reviewed.title})
+        except AppError as exc:
+            await db.rollback()
+            errors.append({"id": course_id, "code": exc.code, "message": exc.message})
+        except Exception:  # noqa: BLE001 - batch keeps processing after one failure
+            await db.rollback()
+            errors.append({"id": course_id, "code": 5000, "message": "审核失败，请重试"})
+
+    action = "通过" if body.decision == "approve" else "驳回"
+    message = f"已{action} {len(succeeded)} 门课程"
+    if errors:
+        message += f"，{len(errors)} 门失败"
+    return success(
+        {"succeeded": succeeded, "failed": errors, "count": len(succeeded)},
+        message,
+    )
+
+
 @router.get("/{course_id}")
 async def get_course(
     course_id: int,
@@ -143,9 +182,14 @@ async def submit_course(
 ) -> dict:
     course = await course_service.get_accessible_course(db, user, course_id, for_management=True)
     submitted = await course_service.submit_course(db, user, course, ip=client_ip(request))
+    message = (
+        "课程符合自动审核规则，已直接发布"
+        if submitted.status == COURSE_STATUS_APPROVED
+        else "课程已提交审核"
+    )
     return success(
         course_out(submitted, include_invite=True, detail=True),
-        "课程已提交审核",
+        message,
     )
 
 
