@@ -24,6 +24,7 @@ from app.db.models.course import (
     COURSE_STATUS_DRAFT,
     COURSE_STATUS_PENDING,
     COURSE_STATUS_REJECTED,
+    COURSE_SUBMITTABLE_STATUSES,
     ENROLLMENT_SOURCE_INVITE,
     ENROLLMENT_SOURCE_TEACHER,
     Chapter,
@@ -230,7 +231,8 @@ async def update_course(
 async def submit_course(
     db: AsyncSession, actor: User, course: Course, *, ip: str | None = None
 ) -> Course:
-    ensure_editable(course)
+    if course.status not in COURSE_SUBMITTABLE_STATUSES:
+        raise ConflictError("当前状态的课程无需提交审核")
     course.status = COURSE_STATUS_PENDING
     course.submitted_at = utc_now()
     course.review_comment = None

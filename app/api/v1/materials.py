@@ -30,7 +30,11 @@ from app.db.models.material import (
 )
 from app.db.models.rbac import ROLE_ADMIN, ROLE_TEACHER, User
 from app.db.session import get_db, get_session_factory
-from app.schemas.material import MaterialReviewRequest, material_list_out
+from app.schemas.material import (
+    MaterialMappingRequest,
+    MaterialReviewRequest,
+    material_list_out,
+)
 from app.services import course_service, material_service
 from app.services.audit_service import client_ip
 from app.services.material_service import index_material
@@ -259,6 +263,27 @@ async def get_material(
     await material_service.ensure_material_access(db, material, user)
     management = _management_view(user) or material.scope == MATERIAL_SCOPE_PERSONAL
     return success(material_list_out(material, management=management))
+
+
+@router.put("/{material_id}/mapping")
+async def update_material_mapping(
+    material_id: int,
+    body: MaterialMappingRequest,
+    request: Request,
+    user: User = Depends(require_permission("material:upload")),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    material = await material_service.get_material(db, material_id)
+    await material_service.ensure_material_access(db, material, user, management=True)
+    updated = await material_service.update_material_mapping(
+        db,
+        user,
+        material,
+        chapter_id=body.chapter_id,
+        knowledge_id=body.knowledge_id,
+        ip=client_ip(request),
+    )
+    return success(material_list_out(updated, management=True), "资料关联章节已更新")
 
 
 @router.post("/{material_id}/review")

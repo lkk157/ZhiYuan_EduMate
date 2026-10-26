@@ -21,6 +21,17 @@ class MaterialReviewRequest(BaseModel):
         return self
 
 
+class MaterialMappingRequest(BaseModel):
+    chapter_id: int | None = Field(default=None, ge=1)
+    knowledge_id: int | None = Field(default=None, ge=1)
+
+    @model_validator(mode="after")
+    def knowledge_requires_chapter(self) -> MaterialMappingRequest:
+        if self.knowledge_id is not None and self.chapter_id is None:
+            raise ValueError("关联知识点前请先选择章节")
+        return self
+
+
 def material_out(material: Material, *, management: bool) -> dict:
     payload = {
         "id": material.id,

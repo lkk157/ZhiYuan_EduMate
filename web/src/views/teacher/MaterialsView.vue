@@ -1,9 +1,11 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Delete,
   Download,
+  FolderOpened,
   Plus,
   Refresh,
   Search,
@@ -18,6 +20,7 @@ import {
   fetchRagHealth,
   listMaterials,
   retryMaterialIndex,
+  updateMaterialMapping,
   uploadMaterialsBatch,
 } from '@/api/material'
 import { formatDateTime } from '@/utils/format'
@@ -53,6 +56,13 @@ const uploadForm = reactive({
   title: '',
   chapterId: null,
 })
+
+const route = useRoute()
+const mappingVisible = ref(false)
+const mappingSaving = ref(false)
+const mappingRow = ref(null)
+const mappingChapterId = ref(null)
+const mappingChapters = ref([])
 
 const statusOptions = [
   { value: 'pending', label: '待审核' },
@@ -136,31 +146,36 @@ function resetFilters() {
   search()
 }
 
-async function openUpload() {
+async function fetchChapters(courseId) {
+  if (!courseId) return []
+  try {
+    const body = await getCourse(courseId)
+    return body?.data?.chapters || []
+  } catch {
+    return []
+  }
+}
+
+async function openUpload(preset = {}) {
+  const presetCourseId =
+    Number(preset.courseId) || (courses.value.length === 1 ? courses.value[0].id : '')
   Object.assign(uploadForm, {
-    courseId: courses.value.length === 1 ? courses.value[0].id : '',
+    courseId: presetCourseId,
     title: '',
     chapterId: null,
   })
   fileList.value = []
   chapterOptions.value = []
   uploadVisible.value = true
-  if (uploadForm.courseId) {
-    await loadChapters(uploadForm.courseId)
+  if (presetCourseId) {
+    await loadChapters(presetCourseId)
+    const presetChapterId = Number(preset.chapterId)
+    if (presetChapterId) uploadForm.chapterId = presetChapterId
   }
 }
 
 async function loadChapters(courseId) {
-  if (!courseId) {
-    chapterOptions.value = []
-    return
-  }
-  try {
-    const body = await getCourse(courseId)
-    chapterOptions.value = body?.data?.chapters || []
-  } catch {
-    chapterOptions.value = []
-  }
+  chapterOptions.value = await fetchChapters(courseId)
 }
 
 async function onCourseChange(value) {
@@ -237,6 +252,31 @@ async function download(row) {
   }
 }
 
+async function openMapping(row) {
+  mappingRow.value = row
+  mappingChapterId.value = row.chapter_id || null
+  mappingChapters.value = await fetchChapters(row.course_id)
+  mappingVisible.value = true
+}
+
+async function saveMapping() {
+  if (!mappingRow.value) return
+  mappingSaving.value = true
+  try {
+    await updateMaterialMapping(mappingRow.value.id, {
+      chapter_id: mappingChapterId.value || null,
+      knowledge_id: null,
+    })
+    ElMessage.success(mappingChapterId.value ? '资料已关联章节' : '已取消章节关联')
+    mappingVisible.value = false
+    await loadMaterials()
+  } catch (error) {
+    ElMessage.error(error?.message || '更新章节关联失败')
+  } finally {
+    mappingSaving.value = false
+  }
+}
+
 async function retry(row) {
   try {
     await retryMaterialIndex(row.id)
@@ -268,6 +308,18 @@ async function remove(row) {
 
 onMounted(async () => {
   await Promise.all([loadCourses(), loadMaterials(), loadHealth()])
+
+  const presetCourseId = Number(route.query.courseId)
+  if (presetCourseId) {
+    courseFilter.value = presetCourseId
+    await loadMaterials()
+    if (route.query.upload === '1') {
+      await openUpload({
+        courseId: presetCourseId,
+        chapterId: route.query.chapterId,
+      })
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -292,7 +344,7 @@ onUnmounted(() => {
         >
           RAG {{ ragHealth.status === 'ok' ? '正常' : '异常' }}
         </el-tag>
-        <el-button type="primary" size="large" :icon="Plus" @click="openUpload">
+        <el-button type="primary" size="large" :icon="Plus" @click="openUpload()">
           上传资料
         </el-button>
       </div>
@@ -389,10 +441,18 @@ onUnmounted(() => {
             <span class="time-text">{{ formatDateTime(row.created_at) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="270" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" :icon="Download" @click="download(row)">下载</el-button>
+              <el-button
+                link
+                type="primary"
+                :icon="FolderOpened"
+                @click="openMapping(row)"
+              >
+                关联章节
+              </el-button>
               <el-button
                 v-if="row.index_status === 'failed'"
                 link
@@ -421,6 +481,34 @@ onUnmounted(() => {
         />
       </div>
     </section>
+
+    <el-dialog v-model="mappingVisible" title="关联课程章节" width="480px">
+      <el-form label-position="top">
+        <el-form-item label="资料">
+          <div class="mapping-material">
+            <strong>{{ mappingRow?.title }}</strong>
+            <small>{{ mappingRow?.course_title }}</small>
+          </div>
+        </el-form-item>
+        <el-form-item label="所属章节">
+          <el-select v-model="mappingChapterId" class="full-width" placeholder="未关联章节" clearable>
+            <el-option
+              v-for="chapter in mappingChapters"
+              :key="chapter.id"
+              :label="chapter.title"
+              :value="chapter.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <p class="dialog-hint">
+        关联后学生可在对应章节页看到该资料；清空章节即取消关联，资料仍保留在课程资料库中。
+      </p>
+      <template #footer>
+        <el-button @click="mappingVisible = false">取消</el-button>
+        <el-button type="primary" :loading="mappingSaving" @click="saveMapping">保存</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="uploadVisible" title="上传课程资料（支持批量）" width="560px">
       <el-form label-position="top">
@@ -618,6 +706,21 @@ onUnmounted(() => {
 
 .full-width {
   width: 100%;
+}
+
+.mapping-material {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mapping-material strong {
+  font-size: 14px;
+}
+
+.mapping-material small {
+  color: var(--em-text-muted);
+  font-size: 12px;
 }
 
 .uploader {

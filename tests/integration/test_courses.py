@@ -286,7 +286,7 @@ async def test_chapter_and_knowledge_crud_and_cascade(client, seeded):
     missing = await client.delete(f"/api/v1/courses/{course_id}/chapters/99999", headers=teacher)
     assert missing.status_code == 404
 
-    # Once approved, structural editing is locked.
+    # Published courses remain editable so teachers can keep content current.
     chapter_again = await add_chapter(client, teacher, course_id, "链表")
     await client.post(f"/api/v1/courses/{course_id}/submit", headers=teacher)
     await client.post(
@@ -294,12 +294,29 @@ async def test_chapter_and_knowledge_crud_and_cascade(client, seeded):
         headers=admin,
         json={"decision": "approve"},
     )
-    locked = await client.put(
-        f"/api/v1/courses/{course_id}/chapters/{chapter_again.json()['data']['id']}",
+    chapter_again_id = chapter_again.json()["data"]["id"]
+    edited_after_publish = await client.put(
+        f"/api/v1/courses/{course_id}/chapters/{chapter_again_id}",
         headers=teacher,
         json={"title": "已发布后修改"},
     )
-    assert locked.status_code == 409
+    assert edited_after_publish.status_code == 200
+    assert edited_after_publish.json()["data"]["title"] == "已发布后修改"
+
+    knowledge_after_publish = await add_knowledge(
+        client, teacher, course_id, chapter_again_id, "链表节点"
+    )
+    assert knowledge_after_publish.status_code == 201
+
+    course_after_publish = await client.put(
+        f"/api/v1/courses/{course_id}",
+        headers=teacher,
+        json={"description": "发布后补充课程简介"},
+    )
+    assert course_after_publish.status_code == 200
+
+    resubmit_approved = await client.post(f"/api/v1/courses/{course_id}/submit", headers=teacher)
+    assert resubmit_approved.status_code == 409
 
 
 async def test_invite_join_roster_and_removal(client, seeded):

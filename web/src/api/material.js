@@ -32,6 +32,10 @@ export function reviewMaterial(materialId, payload) {
   return http.post(`/materials/${materialId}/review`, payload)
 }
 
+export function updateMaterialMapping(materialId, payload) {
+  return http.put(`/materials/${materialId}/mapping`, payload)
+}
+
 export function retryMaterialIndex(materialId) {
   return http.post(`/materials/${materialId}/index/retry`)
 }

@@ -23,7 +23,7 @@ export function enrollmentSourceLabel(source) {
 }
 
 export function canEditCourse(status) {
-  return status === 'draft' || status === 'rejected'
+  return status === 'draft' || status === 'rejected' || status === 'approved'
 }
 
 export function canSubmitCourse(status) {

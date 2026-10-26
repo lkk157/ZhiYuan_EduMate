@@ -48,6 +48,7 @@ from app.services.audit_service import (
     ACTION_MATERIAL_APPROVE,
     ACTION_MATERIAL_DELETE,
     ACTION_MATERIAL_INDEX_RETRY,
+    ACTION_MATERIAL_MAPPING,
     ACTION_MATERIAL_REJECT,
     ACTION_MATERIAL_UPLOAD,
     record_audit,
@@ -325,6 +326,63 @@ async def create_material(
         destination.unlink(missing_ok=True)
         await db.rollback()
         raise
+    return await get_material(db, material.id)
+
+
+async def update_material_mapping(
+    db: AsyncSession,
+    actor: User,
+    material: Material,
+    *,
+    chapter_id: int | None,
+    knowledge_id: int | None,
+    ip: str | None = None,
+) -> Material:
+    """Attach a course material to a chapter/knowledge point (or clear it)."""
+    if material.scope != MATERIAL_SCOPE_COURSE:
+        raise ValidationError("个人知识库资料不支持关联课程章节")
+    if material.status == MATERIAL_STATUS_DELETED:
+        raise NotFoundError("资料不存在")
+    course = material.course
+    if course is None:
+        raise ValidationError("资料未关联课程")
+
+    chapter: Chapter | None = None
+    knowledge: Knowledge | None = None
+    if chapter_id is not None:
+        chapter = next((item for item in course.chapters if item.id == chapter_id), None)
+        if chapter is None:
+            raise ValidationError("章节不属于该课程")
+    if knowledge_id is not None:
+        if chapter is None:
+            raise ValidationError("选择知识点前请先选择章节")
+        knowledge = next((item for item in chapter.knowledges if item.id == knowledge_id), None)
+        if knowledge is None:
+            raise ValidationError("知识点不属于所选章节")
+
+    previous = {
+        "chapter_id": material.chapter_id,
+        "knowledge_id": material.knowledge_id,
+    }
+    # Assign relationships (not only ids) so the eager-loaded objects on this
+    # session reflect the new mapping without a stale identity-map hit.
+    material.chapter = chapter
+    material.knowledge = knowledge
+    await record_audit(
+        db,
+        action=ACTION_MATERIAL_MAPPING,
+        actor=actor,
+        target_type="material",
+        target_id=material.id,
+        detail={
+            "title": material.title,
+            "previous": previous,
+            "chapter_id": material.chapter_id,
+            "knowledge_id": material.knowledge_id,
+        },
+        ip=ip,
+    )
+    await db.commit()
     return await get_material(db, material.id)
 
 

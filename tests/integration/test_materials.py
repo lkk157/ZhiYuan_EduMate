@@ -573,6 +573,103 @@ async def test_batch_upload_rejects_invalid_type_and_too_many_files(client, seed
     assert empty_title_batch.json()["data"]["items"][0]["title"] == "批量单文件标题"
 
 
+async def test_teacher_can_map_material_to_chapter(client, seeded, fake_rag):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    student = await auth_headers(client, "student", seeded["password"])
+    course, chapter_id, knowledge_id = await build_approved_course(
+        client, teacher, admin, "资料映射课程"
+    )
+
+    uploaded = await upload_material(
+        client, teacher, course["id"], title="待映射资料", filename="mapping.pdf"
+    )
+    assert uploaded.status_code == 201, uploaded.text
+    material_id = uploaded.json()["data"]["id"]
+    assert uploaded.json()["data"]["chapter_id"] is None
+
+    denied = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=student,
+        json={"chapter_id": chapter_id},
+    )
+    assert denied.status_code == 403
+
+    other_teacher = await create_second_teacher(client, admin, username="mapping_teacher")
+    other_denied = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=other_teacher,
+        json={"chapter_id": chapter_id},
+    )
+    assert other_denied.status_code == 403
+
+    knowledge_without_chapter = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=teacher,
+        json={"knowledge_id": knowledge_id},
+    )
+    assert knowledge_without_chapter.status_code == 422
+
+    invalid_chapter = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=teacher,
+        json={"chapter_id": 99999},
+    )
+    assert invalid_chapter.status_code == 422
+
+    mapped = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=teacher,
+        json={"chapter_id": chapter_id, "knowledge_id": knowledge_id},
+    )
+    assert mapped.status_code == 200, mapped.text
+    assert mapped.json()["data"]["chapter_id"] == chapter_id
+    assert mapped.json()["data"]["knowledge_id"] == knowledge_id
+    assert mapped.json()["data"]["chapter_title"] == "第一章"
+    assert mapped.json()["data"]["knowledge_title"] == "监督学习"
+
+    _, other_chapter_id, _ = await build_approved_course(client, teacher, admin, "其他映射课程")
+    mismatch = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=teacher,
+        json={"chapter_id": other_chapter_id},
+    )
+    assert mismatch.status_code == 422
+
+    cleared = await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=teacher,
+        json={"chapter_id": None, "knowledge_id": None},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["data"]["chapter_id"] is None
+    assert cleared.json()["data"]["knowledge_id"] is None
+
+    await client.post(
+        f"/api/v1/materials/{material_id}/review",
+        headers=admin,
+        json={"decision": "approve"},
+    )
+    await wait_for_index(client, admin, material_id)
+    await client.post(
+        "/api/v1/courses/join",
+        headers=student,
+        json={"invite_code": course["invite_code"]},
+    )
+
+    await client.put(
+        f"/api/v1/materials/{material_id}/mapping",
+        headers=teacher,
+        json={"chapter_id": chapter_id},
+    )
+    filtered = await client.get(
+        f"/api/v1/materials?course_id={course['id']}&chapter_id={chapter_id}",
+        headers=student,
+    )
+    assert filtered.status_code == 200
+    assert [item["id"] for item in filtered.json()["data"]["items"]] == [material_id]
+
+
 async def test_list_materials_filters_by_chapter_for_students(
     client, seeded, fake_rag, session_factory
 ):

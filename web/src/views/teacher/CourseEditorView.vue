@@ -8,11 +8,13 @@ import {
   CopyDocument,
   Delete,
   EditPen,
+  FolderOpened,
   Key,
   Plus,
   Promotion,
   Reading,
   Refresh,
+  UploadFilled,
   UserFilled,
 } from '@element-plus/icons-vue'
 
@@ -32,6 +34,7 @@ import {
   updateCourse,
   updateKnowledge,
 } from '@/api/course'
+import { listMaterials } from '@/api/material'
 import {
   COURSE_STATUS_META,
   canEditCourse,
@@ -40,6 +43,12 @@ import {
   courseStatusType,
   enrollmentSourceLabel,
 } from '@/utils/course'
+import {
+  indexStatusLabel,
+  indexStatusType,
+  materialStatusLabel,
+  materialStatusType,
+} from '@/utils/material'
 
 const route = useRoute()
 const router = useRouter()
@@ -50,10 +59,26 @@ const students = ref([])
 const studentsLoading = ref(false)
 const studentInput = ref('')
 const addingStudent = ref(false)
+const materials = ref([])
+const materialsLoading = ref(false)
 
 const canEdit = computed(() => canEditCourse(course.value?.status))
 const canSubmit = computed(() => canSubmitCourse(course.value?.status))
 const statusMeta = computed(() => COURSE_STATUS_META[course.value?.status] || {})
+
+const chapterMaterials = computed(() => {
+  const grouped = {}
+  for (const material of materials.value) {
+    if (!material.chapter_id) continue
+    grouped[material.chapter_id] = grouped[material.chapter_id] || []
+    grouped[material.chapter_id].push(material)
+  }
+  return grouped
+})
+
+const unassignedMaterials = computed(() =>
+  materials.value.filter((material) => !material.chapter_id),
+)
 
 const courseDialogVisible = ref(false)
 const courseFormRef = ref()
@@ -96,13 +121,40 @@ async function loadCourse() {
     const body = await getCourse(route.params.id)
     course.value = body?.data || null
     if (course.value) {
-      await loadStudents()
+      await Promise.all([loadStudents(), loadMaterials()])
     }
   } catch (error) {
     ElMessage.error(error?.message || '加载课程失败')
   } finally {
     loading.value = false
   }
+}
+
+async function loadMaterials() {
+  if (!course.value) return
+  materialsLoading.value = true
+  try {
+    const body = await listMaterials({
+      course_id: course.value.id,
+      page_size: 100,
+    })
+    materials.value = body?.data?.items || []
+  } catch (error) {
+    ElMessage.error(error?.message || '加载课程资料失败')
+  } finally {
+    materialsLoading.value = false
+  }
+}
+
+function chapterMaterialCount(chapterId) {
+  return chapterMaterials.value[chapterId]?.length || 0
+}
+
+function openChapterMaterials(chapter = null, upload = false) {
+  const query = { courseId: course.value.id }
+  if (chapter) query.chapterId = chapter.id
+  if (upload) query.upload = '1'
+  router.push({ path: '/teacher/materials', query })
 }
 
 async function loadStudents() {
@@ -441,13 +493,15 @@ onMounted(loadCourse)
         </div>
       </section>
 
-      <div v-if="!canEdit" class="locked-banner">
+      <div v-if="course.status === 'pending'" class="locked-banner">
         <el-icon><Key /></el-icon>
-        <span v-if="course.status === 'pending'">
-          课程正在审核中，章节与知识点暂时锁定。审核通过或驳回后可继续操作。
-        </span>
-        <span v-else>
-          课程已发布，结构内容已锁定以保持审核一致性；你仍可管理邀请码、轮换代码与学生名单。
+        <span>课程正在审核中，章节与知识点暂时锁定。审核通过或驳回后可继续操作。</span>
+      </div>
+
+      <div v-else-if="course.status === 'approved'" class="published-banner">
+        <el-icon><EditPen /></el-icon>
+        <span>
+          课程已发布，仍可维护章节、知识点与资料关联；修改即时生效，无需重新提交审核。
         </span>
       </div>
 
@@ -520,6 +574,50 @@ onMounted(loadCourse)
               >
                 添加知识点
               </el-button>
+
+              <div class="chapter-materials">
+                <div class="chapter-material-head">
+                  <span>
+                    <el-icon><FolderOpened /></el-icon>
+                    本章资料 {{ chapterMaterialCount(chapter.id) }} 份
+                  </span>
+                  <div class="chapter-material-actions">
+                    <el-button
+                      v-if="course.status === 'approved'"
+                      link
+                      type="primary"
+                      :icon="UploadFilled"
+                      @click="openChapterMaterials(chapter, true)"
+                    >
+                      上传资料
+                    </el-button>
+                    <el-button link type="primary" @click="openChapterMaterials(chapter)">
+                      管理资料
+                    </el-button>
+                  </div>
+                </div>
+
+                <div
+                  v-if="chapterMaterials[chapter.id]?.length"
+                  class="chapter-material-list"
+                >
+                  <div
+                    v-for="material in chapterMaterials[chapter.id]"
+                    :key="material.id"
+                    class="chapter-material-item"
+                  >
+                    <span class="material-dot" />
+                    <strong>{{ material.title }}</strong>
+                    <el-tag size="small" :type="materialStatusType(material.status)" effect="light">
+                      {{ materialStatusLabel(material.status) }}
+                    </el-tag>
+                    <el-tag size="small" :type="indexStatusType(material.index_status)" effect="plain">
+                      {{ indexStatusLabel(material.index_status) }}
+                    </el-tag>
+                  </div>
+                </div>
+                <p v-else class="material-empty">本章暂无资料</p>
+              </div>
             </article>
           </div>
 
@@ -528,6 +626,16 @@ onMounted(loadCourse)
               添加章节
             </el-button>
           </el-empty>
+
+          <div v-if="unassignedMaterials.length" class="unassigned-materials">
+            <div>
+              <el-icon><FolderOpened /></el-icon>
+              <span>未关联章节资料 {{ unassignedMaterials.length }} 份</span>
+            </div>
+            <el-button link type="primary" @click="openChapterMaterials()">
+              去关联章节
+            </el-button>
+          </div>
         </section>
 
         <aside class="side-panel">
@@ -773,6 +881,21 @@ onMounted(loadCourse)
   margin-top: 2px;
 }
 
+.published-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  background: #f0f8ff;
+  color: #2f5f96;
+  font-size: 13px;
+}
+
+.published-banner .el-icon {
+  margin-top: 2px;
+}
+
 .reject-banner {
   flex-direction: column;
   gap: 3px;
@@ -911,6 +1034,91 @@ onMounted(loadCourse)
   margin: 10px 0 0 46px;
 }
 
+.chapter-materials {
+  margin: 14px 0 0 46px;
+  padding-top: 12px;
+  border-top: 1px dashed #e5eefb;
+}
+
+.chapter-material-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #5f7796;
+  font-size: 12px;
+}
+
+.chapter-material-head > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chapter-material-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 2px;
+}
+
+.chapter-material-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chapter-material-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #f8faff;
+}
+
+.material-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--em-primary);
+}
+
+.chapter-material-item strong {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-empty {
+  margin-top: 8px;
+  color: var(--em-text-muted);
+  font-size: 11px;
+}
+
+.unassigned-materials {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 14px;
+  padding: 11px 14px;
+  border: 1px dashed #dbe7f7;
+  border-radius: 11px;
+  background: #fbfdff;
+  color: #5f7796;
+  font-size: 12px;
+}
+
+.unassigned-materials > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .side-panel {
   display: grid;
   gap: 18px;
@@ -1040,6 +1248,10 @@ onMounted(loadCourse)
   }
 
   .add-knowledge {
+    margin-left: 0;
+  }
+
+  .chapter-materials {
     margin-left: 0;
   }
 }

@@ -25,7 +25,12 @@ vi.mock('@/api/course', () => ({
   deleteKnowledge: vi.fn(),
 }))
 
+vi.mock('@/api/material', () => ({
+  listMaterials: vi.fn(),
+}))
+
 import { getCourse, listCourseStudents } from '@/api/course'
+import { listMaterials } from '@/api/material'
 import CourseEditorView from '@/views/teacher/CourseEditorView.vue'
 
 const COURSE = {
@@ -88,7 +93,26 @@ describe('TeacherCourseEditorView', () => {
   beforeEach(() => {
     getCourse.mockReset()
     listCourseStudents.mockReset()
+    listMaterials.mockReset()
     getCourse.mockResolvedValue({ code: 0, message: 'ok', data: COURSE })
+    listMaterials.mockResolvedValue({
+      code: 0,
+      data: {
+        items: [
+          {
+            id: 11,
+            title: '第一章讲义',
+            chapter_id: 1,
+            chapter_title: '第一章 绪论',
+            status: 'approved',
+            index_status: 'indexed',
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 100,
+      },
+    })
     listCourseStudents.mockResolvedValue({
       code: 0,
       message: 'ok',
@@ -114,14 +138,19 @@ describe('TeacherCourseEditorView', () => {
 
     expect(getCourse).toHaveBeenCalledWith('1')
     expect(listCourseStudents).toHaveBeenCalledWith(1, { page_size: 100 })
+    expect(listMaterials).toHaveBeenCalledWith({ course_id: 1, page_size: 100 })
     const text = wrapper.text()
     expect(text).toContain('人工智能基础入门')
     expect(text).toContain('已发布')
     expect(text).toContain('第一章 绪论')
     expect(text).toContain('监督学习')
+    expect(text).toContain('第一章讲义')
+    expect(text).toContain('本章资料 1 份')
     expect(text).toContain('ABC12345')
     expect(text).toContain('student')
     expect(text).toContain('邀请码加入')
     expect(text).toContain('课程已发布')
+    expect(text).toContain('修改即时生效')
+    expect(text).toContain('编辑课程信息')
   })
 })

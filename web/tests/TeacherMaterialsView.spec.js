@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import * as ElementPlusIcons from '@element-plus/icons-vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 
 vi.mock('@/api/course', () => ({
   listCourses: vi.fn(),
@@ -15,16 +16,18 @@ vi.mock('@/api/material', () => ({
   uploadMaterialsBatch: vi.fn(),
   reviewMaterial: vi.fn(),
   retryMaterialIndex: vi.fn(),
+  updateMaterialMapping: vi.fn(),
   deleteMaterial: vi.fn(),
   downloadMaterial: vi.fn(),
   fetchRagHealth: vi.fn(),
 }))
 
-import { listCourses } from '@/api/course'
+import { getCourse, listCourses } from '@/api/course'
 import {
   fetchRagHealth,
   listMaterials,
   retryMaterialIndex,
+  updateMaterialMapping,
 } from '@/api/material'
 import TeacherMaterialsView from '@/views/teacher/MaterialsView.vue'
 
@@ -50,9 +53,16 @@ const MATERIAL = {
 }
 
 async function mountMaterials() {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/teacher/materials', component: { template: '<div />' } }],
+  })
+  await router.push('/teacher/materials')
+  await router.isReady()
+
   const wrapper = mount(TeacherMaterialsView, {
     global: {
-      plugins: [ElementPlus],
+      plugins: [router, ElementPlus],
       components: { ...ElementPlusIcons },
     },
   })
@@ -66,6 +76,8 @@ describe('TeacherMaterialsView', () => {
     listMaterials.mockReset()
     fetchRagHealth.mockReset()
     retryMaterialIndex.mockReset()
+    updateMaterialMapping.mockReset()
+    getCourse.mockReset()
 
     listCourses.mockResolvedValue({
       code: 0,
@@ -75,6 +87,17 @@ describe('TeacherMaterialsView', () => {
         page: 1,
         page_size: 100,
       },
+    })
+    getCourse.mockResolvedValue({
+      code: 0,
+      data: {
+        id: 1,
+        chapters: [{ id: 1, title: '第一章 绪论' }],
+      },
+    })
+    updateMaterialMapping.mockResolvedValue({
+      code: 0,
+      data: { ...MATERIAL, chapter_id: 1 },
     })
     listMaterials.mockResolvedValue({
       code: 0,
@@ -98,6 +121,14 @@ describe('TeacherMaterialsView', () => {
     expect(text).toContain('索引失败')
     expect(text).toContain('RAG 正常')
     expect(text).toContain('重试')
+    expect(text).toContain('关联章节')
+
+    const mappingButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '关联章节')
+    await mappingButton.trigger('click')
+    await flushPromises()
+    expect(getCourse).toHaveBeenCalledWith(1)
 
     const retryButton = wrapper
       .findAll('button')
