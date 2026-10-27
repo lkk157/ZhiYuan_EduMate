@@ -91,9 +91,12 @@ onMounted(load)
 
 <template>
   <div v-loading="loading" class="em-page chapter-materials">
-    <el-button link :icon="ArrowLeft" @click="backToCourse">
-      返回课程详情
-    </el-button>
+    <div class="editor-topbar">
+      <el-button link :icon="ArrowLeft" @click="backToCourse">
+        返回课程详情
+      </el-button>
+    </div>
+    
 
     <template v-if="chapter">
       <section class="hero em-card">
