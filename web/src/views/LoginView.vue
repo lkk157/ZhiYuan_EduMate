@@ -247,7 +247,7 @@ async function onSubmit() {
 
       <div class="login-options">
         <el-checkbox v-if="!isRegister">记住登录状态</el-checkbox>
-        <span v-else class="register-note">注册后默认为学生角色</span>
+        <!-- <span v-else class="register-note">注册后默认为学生角色</span> -->
         <button v-if="!isRegister" class="link-button" type="button">忘记密码？</button>
       </div>
 
@@ -262,7 +262,7 @@ async function onSubmit() {
       </el-button>
     </el-form>
 
-    <div class="login-hint">
+    <!-- <div class="login-hint">
       <el-icon><InfoFilled /></el-icon>
       <span v-if="isRegister">
         学生可自助注册；注册后可通过邀请码或教师添加加入课程，并建立自己的知识库。
@@ -270,13 +270,13 @@ async function onSubmit() {
       <span v-else>
         学生可自助注册；教师与管理员账号由管理员统一创建和分配。
       </span>
-    </div>
+    </div> -->
 
-    <div class="login-roles">
+    <!-- <div class="login-roles">
       <span><i class="dot dot-student" />学生端</span>
       <span><i class="dot dot-teacher" />教师端</span>
       <span><i class="dot dot-admin" />管理员端</span>
-    </div>
+    </div> -->
   </div>
 </template>
 

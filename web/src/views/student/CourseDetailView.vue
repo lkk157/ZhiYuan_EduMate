@@ -76,9 +76,12 @@ onMounted(load)
 
 <template>
   <div v-loading="loading" class="em-page course-detail">
-    <el-button link :icon="ArrowLeft" @click="router.push('/student/courses')">
-      返回我的课程
-    </el-button>
+    <div class="editor-topbar">
+      <el-button link :icon="ArrowLeft" @click="router.push('/student/courses')">
+        返回我的课程
+      </el-button>
+    </div>
+    
 
     <template v-if="course">
       <section class="hero em-card">

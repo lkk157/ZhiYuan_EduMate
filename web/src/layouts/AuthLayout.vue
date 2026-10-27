@@ -39,8 +39,8 @@ const features = [
       </div>
 
       <div class="auth-brand-footer">
-        <span>本科毕业设计 · 双服务架构</span>
-        <span>FastAPI · Vue 3 · RAG</span>
+        <!-- <span>本科毕业设计 · 双服务架构</span> -->
+        <!-- <span>FastAPI · Vue 3 · RAG</span> -->
       </div>
     </section>
 
