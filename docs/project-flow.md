@@ -43,7 +43,7 @@
 | P1.6 | 学生个人知识库与资料索引 | 已完成 | `a99239c` · `feat(kb): personal knowledge bases and direct indexing` |
 | P1.7 | 问答、引用与问答记录（课程/个人库） | 已完成 | `d4a02ba` · `feat(qa): scoped RAG Q&A with citations and history` |
 | P1.8 | 基础推荐与学生首页（已选课程） | 已完成 | `30a4aae` · `feat(recommend): recommendations for enrolled courses and student home` |
-| P1.9 | 部署、种子数据与阶段一验收 | 已完成 | `PLACEHOLDER` · `chore(release): phase 1 deployment, demo data and acceptance docs` |
+| P1.9 | 部署、种子数据与阶段一验收 | 已完成 | `545ad12` · `chore(release): phase 1 deployment, demo data and acceptance docs` |
 | P2.1 | 题库与答题 | 待开始 | — |
 | P2.2 | 行为采集与掌握度 | 待开始 | — |
 | P2.3 | 个性化推荐 v2 | 待开始 | — |
@@ -247,7 +247,7 @@
 - **测试**：全量 pytest、前端 Vitest/build、真实 RAG 集成测试、compose 冒烟。
 - **验证**：完成第 9 节阶段一验收流程。
 - **提交**：`chore(release): phase 1 deployment, demo data and acceptance docs`
-- **验收记录（2026-10-27，提交 `PLACEHOLDER`）**：
+- **验收记录（2026-10-27，提交 `545ad12`）**：
   - 后端 `pytest -q`：**101 passed, 1 skipped**（默认真实 RAG 测试跳过）；`ruff check` / `ruff format --check`：通过。
   - 前端 `npm run test:unit -- --run`：**20 个测试文件 / 36 个测试通过**；`npm run build`：成功。
   - 部署产物：`deploy/Dockerfile.api`、`deploy/Dockerfile.web`、`deploy/nginx.conf`、`deploy/start-api.sh`、完整 `docker-compose.yml`、`.dockerignore`；API 镜像 400MB、Web 镜像 78MB。
