@@ -1,6 +1,6 @@
 # EduMate 项目流程（唯一事实源）
 
-> 版本：v1.8（2026-10-23）
+> 版本：v1.9（2026-10-27）
 > 适用：本科毕业设计 · 双服务架构
 > 说明：本文档由批准后的实施计划落库，是项目阶段、产物、测试门禁与验收标准的唯一事实源。
 > 每个小阶段完成后，必须更新本文档的状态、产物、测试结果与提交哈希，并随 Git 提交。
@@ -43,7 +43,7 @@
 | P1.6 | 学生个人知识库与资料索引 | 已完成 | `a99239c` · `feat(kb): personal knowledge bases and direct indexing` |
 | P1.7 | 问答、引用与问答记录（课程/个人库） | 已完成 | `d4a02ba` · `feat(qa): scoped RAG Q&A with citations and history` |
 | P1.8 | 基础推荐与学生首页（已选课程） | 已完成 | `30a4aae` · `feat(recommend): recommendations for enrolled courses and student home` |
-| P1.9 | 部署、种子数据与阶段一验收 | 待开始 | — |
+| P1.9 | 部署、种子数据与阶段一验收 | 已完成 | `PLACEHOLDER` · `chore(release): phase 1 deployment, demo data and acceptance docs` |
 | P2.1 | 题库与答题 | 待开始 | — |
 | P2.2 | 行为采集与掌握度 | 待开始 | — |
 | P2.3 | 个性化推荐 v2 | 待开始 | — |
@@ -247,6 +247,18 @@
 - **测试**：全量 pytest、前端 Vitest/build、真实 RAG 集成测试、compose 冒烟。
 - **验证**：完成第 9 节阶段一验收流程。
 - **提交**：`chore(release): phase 1 deployment, demo data and acceptance docs`
+- **验收记录（2026-10-27，提交 `PLACEHOLDER`）**：
+  - 后端 `pytest -q`：**101 passed, 1 skipped**（默认真实 RAG 测试跳过）；`ruff check` / `ruff format --check`：通过。
+  - 前端 `npm run test:unit -- --run`：**20 个测试文件 / 36 个测试通过**；`npm run build`：成功。
+  - 部署产物：`deploy/Dockerfile.api`、`deploy/Dockerfile.web`、`deploy/nginx.conf`、`deploy/start-api.sh`、完整 `docker-compose.yml`、`.dockerignore`；API 镜像 400MB、Web 镜像 78MB。
+  - Compose：`docker compose up -d --build` 后 `edumate-api`、`edumate-web`、`edumate-mysql`、`edumate-redis` 均为 healthy；API 启动自动执行 Alembic 迁移；Nginx `/api/` 反代、SPA fallback、`/healthz` 正常。
+  - 种子数据：`scripts/seed_demo.py` 幂等创建 5 个账号（admin/teacher/teacher2/student/student2）、3 门已发布课程（邀请码 AI2026AA、DS2026BB、PY2026CC）、章节/知识点、4 条选课关系、6 份课程资料、2 份个人知识库资料；`--with-rag` 后 8 份资料全部 `indexed`。
+  - 冒烟：`scripts/smoke_phase1.py` 22 项检查全部通过，覆盖健康、三角色登录、管理员治理、教师课程/资料、学生首页/课程/资料/推荐/知识库/问答历史、真实 RAG 健康、Web SPA 与 Nginx 健康。
+  - Web 代理：`http://127.0.0.1:8080/api/v1/auth/login` 200，`/student/home` SPA 200。
+  - 真实 RAG：`RUN_RAG_TESTS=1 pytest -m integration tests/integration/test_rag_live.py` 通过（健康、建组、上传、提问）。
+  - 降级验收：停止 RAG 容器后，学生首页/课程/资料/推荐/知识库均 200；问答返回 HTTP 200 + `status=degraded`，RAG 恢复后健康正常。
+  - 文档：新增 `docs/api.md`、`docs/rag-contract.md`、`docs/demo.md`；README/CLAUDE 更新 Docker 部署、演示数据、冒烟与端口说明。
+  - 发布：tag `v0.1.0-phase1`。
 
 **阶段一完成定义**：学生可自助注册；三角色可登录且权限隔离；管理员管用户/审核/查审计；教师建课、生成邀请码、添加学生、传资料、提审；学生凭邀请码或教师添加进入课程；资料审核后索引成功；学生可创建个人知识库并上传资料；学生可对课程/个人知识库提问并获得引用；记录可查；基础推荐有结果；RAG 停止时非问答功能正常；compose 一键启动。
 
@@ -327,3 +339,4 @@
 | 2026-10-23 | v1.8 | 完成 P1.8 基础推荐与学生首页：已选课程内热门/同章节/相似推荐及理由、浏览与下载计数、Redis 热门缓存降级、个人知识库最近资料、学生首页聚合；新增 material_views |
 | 2026-10-26 | v1.8.1 | 体验优化：学生课程资料并入章节页；问答引用折叠；教师可维护已发布课程并映射资料章节；角色权限页收窄；新增课程/资料自动审核（人工兜底）与批量审核 |
 | 2026-10-26 | v1.8.2 | 新增学生资料在线预览：PDF/图片原生预览，DOCX/PPTX 前端解析，预览不增加下载次数；新增资料 preview 接口与预览弹窗 |
+| 2026-10-27 | v1.9 | 完成 P1.9 部署与阶段一验收：Dockerfile/Nginx/完整 compose、5 账号/3 课程演示种子、幂等--with-rag 索引、冒烟脚本、API/RAG/演示文档；发布 tag `v0.1.0-phase1` |

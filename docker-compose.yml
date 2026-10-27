@@ -40,6 +40,67 @@ services:
       retries: 20
     restart: unless-stopped
 
+  edumate-api:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.api
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    container_name: edumate-api
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      APP_NAME: EduMate
+      API_PREFIX: /api/v1
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      SECRET_KEY: ${SECRET_KEY:-edumate-compose-demo-secret-key-please-change-before-deploy}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      CORS_ORIGINS: ${CORS_ORIGINS_DOCKER:-http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173}
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: ${MYSQL_USER:-edumate}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-edumate_dev_password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-edumate}
+      DATABASE_URL: ""
+      REDIS_URL: redis://redis:6379/0
+      REDIS_ENABLED: "true"
+      RAG_BASE_URL: ${RAG_BASE_URL_DOCKER:-http://host.docker.internal:18000}
+      RAG_API_KEY: ${RAG_API_KEY:-}
+      RAG_TIMEOUT_SECONDS: ${RAG_TIMEOUT_SECONDS:-300}
+      RAG_CONNECT_TIMEOUT_SECONDS: ${RAG_CONNECT_TIMEOUT_SECONDS:-10}
+      RAG_MAX_RETRIES: ${RAG_MAX_RETRIES:-1}
+      UPLOAD_DIR: /app/data/uploads
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      AUTO_REVIEW_ENABLED: ${AUTO_REVIEW_ENABLED:-true}
+      SEED_DEMO_PASSWORD: ${SEED_DEMO_PASSWORD:-EduMate@2026}
+      TZ: Asia/Shanghai
+    ports:
+      - "${API_PORT:-8001}:8000"
+    volumes:
+      - uploads_data:/app/data/uploads
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  edumate-web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_API_BASE_URL: /api/v1
+    container_name: edumate-web
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      edumate-api:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   mysql_data:
   redis_data:
+  uploads_data:

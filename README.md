@@ -5,7 +5,7 @@
 - **EduMate 主服务**：用户/权限、课程体系、资料元数据、问答记录、推荐、学情与治理。
 - **知源 RAG 服务**（已有，独立部署）：文档解析、向量检索与 LLM 生成，通过 `/v1` HTTP API 接入。
 
-> 当前进度：**P1.8 基础推荐与学生首页已完成**。学生首页聚合已选课程、热门资料、同章节/相似推荐及理由、个人知识库最近资料；推荐限定已选且已发布、已索引的课程资料，热门列表使用 Redis 可选缓存并自动降级；浏览与下载计数、个人资料与问答统计均已接入。下一步 P1.9 部署、种子数据与阶段一验收。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)。
+> 当前进度：**阶段一（P1.1–P1.9）已完成，tag `v0.1.0-phase1`**。三角色权限、课程/资料审核与真实 RAG 索引、选课与邀请码、个人知识库、带引用问答、基础推荐、资料在线预览、自动审核与批量审核均已交付；`docker compose up -d --build` 可一键启动，演示数据与冒烟脚本已通过验收。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)，API 见 [docs/api.md](docs/api.md)。
 
 ## 技术栈
 
@@ -61,18 +61,22 @@ docker compose up -d mysql redis
 初始化演示账号：
 
 ```bash
+# 仅 RBAC 三角色账号
 .venv/Scripts/python.exe scripts/seed.py
+
+# 完整阶段一演示数据：5 账号、3 课程、章节/知识点、选课、资料、个人知识库
+.venv/Scripts/python.exe scripts/seed_demo.py --with-rag
 ```
 
 | 账号 | 角色 | 密码 |
 |---|---|---|
 | `admin` | 管理员 | `SEED_DEMO_PASSWORD`（默认 `EduMate@2026`） |
-| `teacher` | 教师 | 同上 |
-| `student` | 学生 | 同上 |
+| `teacher` / `teacher2` | 教师 | 同上 |
+| `student` / `student2` | 学生 | 同上 |
 
 学生也可以在登录页切换到“注册”，自助创建学生账号并自动登录。教师与管理员账号仍由管理员创建。
 
-> 演示密码仅用于本地开发，部署前务必修改 `SEED_DEMO_PASSWORD` 并重新执行 `seed.py --reset-passwords`。
+> 演示密码仅用于本地开发，部署前务必修改 `SEED_DEMO_PASSWORD` 并重新执行 `seed_demo.py --reset-passwords`。
 
 ### 3. 前端
 
@@ -93,6 +97,32 @@ cd web
 npm run test:unit -- --run
 npm run build
 ```
+
+## Docker Compose 一键启动
+
+先停止占用 8001 的本地后端进程，再执行：
+
+```bash
+cp .env.example .env
+# 修改 SECRET_KEY、MYSQL_PASSWORD、SEED_DEMO_PASSWORD，填入 RAG_API_KEY
+docker compose up -d --build
+docker compose exec edumate-api python scripts/seed_demo.py --with-rag
+```
+
+- Web：<http://localhost:8080>
+- API：<http://localhost:8001>
+- Nginx 将 `/api/` 反向代理到 `edumate-api:8000`，上传上限 210MB，问答代理超时 310 秒。
+- MySQL/Redis 由 compose 启动；RAG 服务不包含在 EduMate compose 内，容器通过 `host.docker.internal:18000` 访问宿主 RAG。
+- 上传文件保存在 `uploads_data` 卷，MySQL/Redis 数据分别保存在 `mysql_data`、`redis_data` 卷。
+
+冒烟检查：
+
+```bash
+docker compose exec edumate-api python scripts/smoke_phase1.py \
+  --base-url http://127.0.0.1:8000 --web-url http://edumate-web --with-rag
+```
+
+更多演示步骤见 [docs/demo.md](docs/demo.md)，API 见 [docs/api.md](docs/api.md)，RAG 契约见 [docs/rag-contract.md](docs/rag-contract.md)。
 
 ## RAG 服务
 

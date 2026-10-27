@@ -30,6 +30,10 @@
 - RAG 资料文件名固定 `m{material_id}__{sanitized_original}`；引用解析正则 `^m(\d+)__(.+)$`。
 - RAG 429 按 `Retry-After` 最多重试 1 次；问答超时 300s；失败降级并记录。
 - 后端端口 8001，RAG 容器 8000 / 本机映射 18000，MySQL 宿主 3307，Web Docker 8080。
+- 自动审核规则：课程简介非空且至少 1 章节/1 知识点；资料关联章节且为 PDF/DOCX/PPTX；其余进入人工待审核队列。`AUTO_REVIEW_ENABLED` 控制。
+- 已发布课程允许教师继续维护章节、知识点和资料章节映射，修改即时生效；不允许重复提交审核。
+- 资料在线预览使用 `GET /materials/{id}/preview`（inline、不计下载）；前端 PDF/图片原生预览，DOCX/PPTX 使用按需加载的前端解析库。
+- Docker 部署：`deploy/Dockerfile.api`、`deploy/Dockerfile.web`、`deploy/nginx.conf`、`docker-compose.yml`；上传文件使用 `uploads_data` 卷。
 
 ## 常用命令
 
@@ -48,6 +52,12 @@ npm install
 npm run dev
 npm run test:unit -- --run
 npm run build
+
+# Docker / 演示数据 / 冒烟
+docker compose up -d --build
+docker compose exec edumate-api python scripts/seed_demo.py --with-rag
+docker compose exec edumate-api python scripts/smoke_phase1.py \
+  --base-url http://127.0.0.1:8000 --web-url http://edumate-web --with-rag
 ```
 
 ## 代码风格

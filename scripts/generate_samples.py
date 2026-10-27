@@ -60,10 +60,34 @@ def build_data_structure_docx(path: Path) -> None:
     document.save(path)
 
 
+def build_python_docx(path: Path) -> None:
+    document = Document()
+    document.add_heading("Python 程序设计入门", level=0)
+    document.add_heading("第一章 基础语法", level=1)
+    document.add_paragraph(
+        "Python 使用缩进表示代码块。常见基础类型包括整数、浮点数、字符串、布尔值和 None；"
+        "列表、元组、字典与集合用于组织多个值。"
+    )
+    document.add_paragraph(
+        "条件语句使用 if / elif / else，循环可以使用 for 与 while。"
+        "函数使用 def 定义，参数可以是位置参数、关键字参数或默认参数。"
+    )
+    document.add_heading("第二章 函数与模块", level=1)
+    document.add_paragraph(
+        "函数把可复用逻辑封装起来，并通过 return 返回结果。"
+        "模块是包含 Python 代码的文件，可以使用 import 导入标准库或第三方库。"
+    )
+    document.add_paragraph(
+        "异常处理使用 try / except / finally，能够在程序运行出错时进行恢复或清理。"
+    )
+    document.save(path)
+
+
 def main() -> None:
     SAMPLES.mkdir(parents=True, exist_ok=True)
     build_machine_learning_docx(SAMPLES / "机器学习基础.docx")
     build_data_structure_docx(SAMPLES / "数据结构与算法基础.docx")
+    build_python_docx(SAMPLES / "Python程序设计基础.docx")
     print(f"Generated sample documents in {SAMPLES}")
 
 
