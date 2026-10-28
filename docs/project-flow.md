@@ -1,6 +1,6 @@
 # EduMate 项目流程（唯一事实源）
 
-> 版本：v1.9（2026-10-27）
+> 版本：v1.10（2026-10-28）
 > 适用：本科毕业设计 · 双服务架构
 > 说明：本文档由批准后的实施计划落库，是项目阶段、产物、测试门禁与验收标准的唯一事实源。
 > 每个小阶段完成后，必须更新本文档的状态、产物、测试结果与提交哈希，并随 Git 提交。
@@ -44,6 +44,7 @@
 | P1.7 | 问答、引用与问答记录（课程/个人库） | 已完成 | `d4a02ba` · `feat(qa): scoped RAG Q&A with citations and history` |
 | P1.8 | 基础推荐与学生首页（已选课程） | 已完成 | `30a4aae` · `feat(recommend): recommendations for enrolled courses and student home` |
 | P1.9 | 部署、种子数据与阶段一验收 | 已完成 | `545ad12` · `chore(release): phase 1 deployment, demo data and acceptance docs` |
+| P1.9.1 | 软删除同步 RAG 文档删除 | 已完成 | `20e8d4f` · `feat(material): sync RAG document deletion on soft delete` |
 | P2.1 | 题库与答题 | 待开始 | — |
 | P2.2 | 行为采集与掌握度 | 待开始 | — |
 | P2.3 | 个性化推荐 v2 | 待开始 | — |
@@ -160,13 +161,13 @@
   - 批量上传（提交 `712c39a`）：`POST /materials/batch` 支持单次 ≤10 个文件，统一课程/章节/知识点；多文件标题自动取文件名，单文件可自定义标题；返回 `items/succeeded/failed/errors`，部分失败不影响成功文件；类型或大小等批次级校验不通过时整批拒绝、不落库。
   - 索引状态机：上传 `pending` → 管理员通过触发后台索引 `indexing` → `indexed` / `failed`；失败记录 `index_error` 并可由教师重试；索引文件名固定 `m<material_id>__` 前缀，供后续引用回映射。
   - RAG 分组：首次索引按 `edumate-course-{course_id}` 懒创建并持久化 `rag_group_id`；同课程后续资料复用同一分组。
-  - 权限：教师仅管理自己课程资料；学生仅能访问已加入且已发布课程中 `approved` 的资料；学生详情不返回 `rag_filename/vector_doc_id/index_error`；软删除后所有角色不可访问文件（向量暂不删除，受 RAG `/v1` 无删除接口限制）。
+  - 权限：教师仅管理自己课程资料；学生仅能访问已加入且已发布课程中 `approved` 的资料；学生详情不返回 `rag_filename/vector_doc_id/index_error`；软删除后所有角色不可访问文件（2026-10-28 起同步删除 RAG 向量，见 P1.9.1）。
   - 审计：`material.upload/approve/reject/index.retry/delete` 写入审计。
   - 真实联调：使用 `samples/机器学习基础.docx`（37KB）上传 → 管理员通过 → 后台索引 → `indexed`，RAG 分组 `edumate-course-1`（id=12）文档数 1，`vector_doc_id=75`；学生列表可见并成功下载原始文件。另验证驳回资料对学生不可见、软删除后学生不可下载。
   - 批量真实联调（2026-10-23）：一次上传 `机器学习基础.docx` 与 `数据结构与算法基础.docx`，返回 `succeeded=2`，自动标题分别为两个文件名；包含 `bad.exe` 的批次被整批拒绝（422，不落库）。审核通过第一份后索引成功（`vector_doc_id=76`），第二份软删除成功。
   - 前端：教师资料页（课程/审核/索引筛选、上传弹窗、索引状态轮询、失败重试、下载、删除、RAG 健康提示）；管理员资料审核页；学生“学习资料”页与课程详情资料区；管理员导航新增“资料审核”，仪表盘显示真实 RAG 健康状态。
 
-> 说明：RAG `/v1` 无文档删除接口，软删除只影响 EduMate 业务可见性，向量仍保留；`samples/` 下示例 docx 与生成脚本已提交。真实联调在本地演示库留下课程 1 的已索引资料「机器学习基础讲义」，以及一条已软删除的驳回示例资料。
+> 说明：2026-10-28 RAG 已提供 `DELETE /v1/kb/groups/{gid}/documents` 接口，EduMate 软删除已改为同步删除向量（见 P1.9.1）；此前版本软删除只影响业务可见性。`samples/` 下示例 docx 与生成脚本已提交。
 
 ### P1.6 学生个人知识库与资料索引
 
@@ -191,7 +192,7 @@
   - 前端：学生“我的知识库”页面（知识库卡片、创建/重命名/删除、上传资料、索引状态轮询、失败重试、下载、删除）；侧栏新增入口；管理员审计动作新增知识库/个人资料动作。
   - 真实联调：学生默认知识库 id=1；创建并重命名 `P1.6 算法笔记-已重命名`（id=2）；上传 `samples/数据结构与算法基础.docx` → 直接索引成功，`vector_doc_id=80`，RAG 分组 `edumate-kb-2` 文档数 1；知识库计数 1 份资料 / 1 已索引；下载 200。另一学生访问该库 404、访问资料 403；管理员访问均 403。
 
-> 说明：删除知识库只做软删除并阻断访问，RAG `/v1` 无删除接口，向量仍保留；默认知识库不可删除。个人知识库资料不进入管理员资料审核列表。
+> 说明：2026-10-28 起删除知识库会先同步删除其全部个人资料的 RAG 向量，再软删除并阻断访问（见 P1.9.1）；默认知识库不可删除。个人知识库资料不进入管理员资料审核列表。
 
 ### P1.7 问答、引用与问答记录（课程/个人库）
 
@@ -259,6 +260,25 @@
   - 降级验收：停止 RAG 容器后，学生首页/课程/资料/推荐/知识库均 200；问答返回 HTTP 200 + `status=degraded`，RAG 恢复后健康正常。
   - 文档：新增 `docs/api.md`、`docs/rag-contract.md`、`docs/demo.md`；README/CLAUDE 更新 Docker 部署、演示数据、冒烟与端口说明。
   - 发布：tag `v0.1.0-phase1`。
+
+### P1.9.1 软删除同步 RAG 文档删除
+
+- **背景**：RAG 服务新增 `DELETE /v1/kb/groups/{gid}/documents/{did}` 与按 `file_name` 删除接口。RAG 知识库是派生索引，本地软删除不同步会导致已删资料继续被检索和引用。
+- **交付**：
+  - `RagClient.delete_document()`、`delete_document_by_name()`：DELETE 请求复用 429/5xx 重试；404 视为已删除终态，不视为失败。
+  - 资料软删除：正在索引返回 409；优先按 `vector_doc_id` 删除，缺失/404 时按 `rag_filename` 兜底；成功后清空 `vector_doc_id`；RAG 失败返回 502 且不改变本地状态。
+  - 知识库软删除：先删除库内全部个人资料向量（任一失败则整体不落库），再软删除知识库；正在索引返回 409。
+  - 审计：`material.delete` 记录 `vector_doc_id/rag_vector_deleted`；`knowledge_base.delete` 记录 `material_count/rag_synced`。
+  - 文档：更新 `docs/rag-contract.md`、`docs/api.md`、README/CLAUDE 约定。
+- **测试**：RAG 客户端按 id/文件名删除与 404 幂等；课程资料删除调用 RAG 并清空 doc id；RAG 失败阻断删除；索引中 409；个人资料删除与知识库级联删除；知识库 RAG 失败回滚。
+- **验证**：本地/真实 RAG 环境删除已索引资料后，文档列表不再包含对应文件，问答不再引用；RAG 停止时删除返回 502 且资料仍可访问。
+- **约束**：本次不重建 Docker 镜像，部署重建留待用户确认。
+- **提交**：`feat(material): sync RAG document deletion on soft delete`
+- **验收记录（2026-10-28，提交 `20e8d4f`）**：
+  - 后端 `pytest -q`：**107 passed, 1 skipped**（新增 6 个删除相关测试）；`ruff check` / `ruff format --check`：通过。
+  - 前端 `npm run test:unit -- --run`：**20 个测试文件 / 36 个测试通过**；`npm run build`：成功；删除确认文案更新为“同步清理 RAG 向量”。
+  - 真实 RAG 联调（分组 26）：上传 `m999__verify.docx` → `doc_id=116` → 按 id 删除 `True`，重复删除 `False`，文档列表 `[]`；重新上传得 `doc_id=117` → 按文件名删除 `True`，重复删除 `False`，文档列表 `[]`。
+  - 未执行 `docker compose build/up`，现有容器仍运行 P1.9 镜像；代码需在下次确认后重建生效。
 
 **阶段一完成定义**：学生可自助注册；三角色可登录且权限隔离；管理员管用户/审核/查审计；教师建课、生成邀请码、添加学生、传资料、提审；学生凭邀请码或教师添加进入课程；资料审核后索引成功；学生可创建个人知识库并上传资料；学生可对课程/个人知识库提问并获得引用；记录可查；基础推荐有结果；RAG 停止时非问答功能正常；compose 一键启动。
 
@@ -340,3 +360,4 @@
 | 2026-10-26 | v1.8.1 | 体验优化：学生课程资料并入章节页；问答引用折叠；教师可维护已发布课程并映射资料章节；角色权限页收窄；新增课程/资料自动审核（人工兜底）与批量审核 |
 | 2026-10-26 | v1.8.2 | 新增学生资料在线预览：PDF/图片原生预览，DOCX/PPTX 前端解析，预览不增加下载次数；新增资料 preview 接口与预览弹窗 |
 | 2026-10-27 | v1.9 | 完成 P1.9 部署与阶段一验收：Dockerfile/Nginx/完整 compose、5 账号/3 课程演示种子、幂等--with-rag 索引、冒烟脚本、API/RAG/演示文档；发布 tag `v0.1.0-phase1` |
+| 2026-10-28 | v1.10 | P1.9.1 软删除同步 RAG：资料/知识库删除调用 RAG DELETE，404 幂等，索引中 409，RAG 失败 502 不落库；清理 `vector_doc_id` 并扩展删除审计；RAG 契约/API/README/CLAUDE 同步更新 |
