@@ -15,6 +15,7 @@ from app.db.models.knowledge_base import (
 )
 from app.db.models.material import (
     INDEX_STATUS_INDEXED,
+    INDEX_STATUS_INDEXING,
     MATERIAL_SCOPE_PERSONAL,
     MATERIAL_STATUS_DELETED,
     Material,
@@ -26,7 +27,8 @@ from app.services.audit_service import (
     ACTION_KB_UPDATE,
     record_audit,
 )
-from app.services.material_service import MATERIAL_LOAD
+from app.services.material_service import MATERIAL_LOAD, delete_material_rag_document
+from app.services.rag_client import RagClient
 
 DEFAULT_KB_NAME = "我的知识库"
 DEFAULT_KB_DESCRIPTION = "个人学习资料默认知识库"
@@ -194,10 +196,31 @@ async def soft_delete_knowledge_base(
     owner: User,
     kb: KnowledgeBase,
     *,
+    rag_client: RagClient,
     ip: str | None = None,
 ) -> None:
     if kb.is_default:
         raise ConflictError("默认知识库不可删除")
+
+    materials = list(
+        await db.scalars(
+            select(Material)
+            .options(*MATERIAL_LOAD)
+            .where(
+                Material.knowledge_base_id == kb.id,
+                Material.scope == MATERIAL_SCOPE_PERSONAL,
+                Material.status != MATERIAL_STATUS_DELETED,
+            )
+        )
+    )
+    if any(material.index_status == INDEX_STATUS_INDEXING for material in materials):
+        raise ConflictError("知识库中有资料正在索引，请稍后再删除")
+
+    rag_synced = 0
+    for material in materials:
+        if await delete_material_rag_document(material, rag_client, group_id=kb.rag_group_id):
+            rag_synced += 1
+
     kb.status = KB_STATUS_DELETED
     await record_audit(
         db,
@@ -205,7 +228,11 @@ async def soft_delete_knowledge_base(
         actor=owner,
         target_type="knowledge_base",
         target_id=kb.id,
-        detail={"name": kb.name},
+        detail={
+            "name": kb.name,
+            "material_count": len(materials),
+            "rag_synced": rag_synced,
+        },
         ip=ip,
     )
     await db.commit()

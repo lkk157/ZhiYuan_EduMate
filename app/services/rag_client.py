@@ -108,6 +108,7 @@ class RagClient:
         path: str,
         *,
         json: dict[str, Any] | None = None,
+        params: dict[str, str] | None = None,
         timeout: float | None = None,
         allowed_statuses: set[int] | None = None,
         retry_server_errors: bool = True,
@@ -119,7 +120,9 @@ class RagClient:
         attempt = 0
         while True:
             try:
-                response = await client.request(method, path, json=json, timeout=timeout)
+                response = await client.request(
+                    method, path, json=json, params=params, timeout=timeout
+                )
             except httpx.TimeoutException as exc:
                 raise RagError("RAG 服务响应超时，请稍后重试") from exc
             except httpx.HTTPError as exc:
@@ -282,6 +285,30 @@ class RagClient:
             if first.get("doc_id") is None:
                 raise RagError("RAG 未返回文档 ID")
             return first
+
+    async def delete_document(self, group_id: int, doc_id: int) -> bool:
+        """Permanently delete one RAG document by id.
+
+        The RAG service returns 404 for an already deleted document; callers
+        treat that as the idempotent success state, so ``False`` means "was
+        already gone" rather than "failed".
+        """
+        response = await self._request(
+            "DELETE",
+            f"/v1/kb/groups/{group_id}/documents/{doc_id}",
+            allowed_statuses={404},
+        )
+        return response.status_code != 404
+
+    async def delete_document_by_name(self, group_id: int, file_name: str) -> bool:
+        """Delete a RAG document by its exact basename (URL encoded by httpx)."""
+        response = await self._request(
+            "DELETE",
+            f"/v1/kb/groups/{group_id}/documents",
+            params={"file_name": file_name},
+            allowed_statuses={404},
+        )
+        return response.status_code != 404
 
 
 _rag_client: RagClient | None = None

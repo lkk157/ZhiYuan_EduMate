@@ -26,6 +26,7 @@
 - 课程访问必须校验 `course_enrollments`；教师可生成邀请码或按用户名添加学生；邀请码仅对 `approved` 课程有效。
 - 学生个人知识库按 `owner_id` 隔离；个人资料直接索引、无需管理员审核；每个知识库独立 RAG 分组。
 - 课程资料审核通过后才索引，避免未发布内容进入课程 RAG 分组。
+- 资料/知识库软删除必须同步调用 RAG `DELETE /v1/kb/groups/{gid}/documents...`；404 视为已删，优先按 `vector_doc_id`、兜底按 `rag_filename`，成功后清空 `vector_doc_id`；索引中返回 409，RAG 失败返回 502 且不落库。
 - JWT 载荷 `sub/ver/role/iat/exp`；角色/密码变更递增 `token_version`。
 - RAG 资料文件名固定 `m{material_id}__{sanitized_original}`；引用解析正则 `^m(\d+)__(.+)$`。
 - RAG 429 按 `Retry-After` 最多重试 1 次；问答超时 300s；失败降级并记录。

@@ -17,7 +17,9 @@ class FakeRagClient:
     def __init__(self) -> None:
         self.ensure_calls: list[str] = []
         self.uploads: list[dict] = []
+        self.deletes: list[dict] = []
         self.fail_uploads = 0
+        self.fail_deletes = 0
         self._groups: dict[str, int] = {}
 
     async def health(self) -> dict:
@@ -44,6 +46,20 @@ class FakeRagClient:
             }
         )
         return {"ok": True, "doc_id": 7000 + len(self.uploads)}
+
+    async def delete_document(self, group_id: int, doc_id: int) -> bool:
+        if self.fail_deletes > 0:
+            self.fail_deletes -= 1
+            raise RagError("模拟个人资料 RAG 删除失败")
+        self.deletes.append({"by": "id", "group_id": group_id, "doc_id": doc_id})
+        return True
+
+    async def delete_document_by_name(self, group_id: int, file_name: str) -> bool:
+        if self.fail_deletes > 0:
+            self.fail_deletes -= 1
+            raise RagError("模拟个人资料 RAG 删除失败")
+        self.deletes.append({"by": "name", "group_id": group_id, "file_name": file_name})
+        return True
 
 
 @pytest.fixture
@@ -255,6 +271,7 @@ async def test_personal_material_indexes_privately(client, seeded, fake_rag):
         f"/api/v1/materials/{material['id']}/download", headers=student
     )
     assert denied_download.status_code == 404
+    assert fake_rag.deletes == [{"by": "id", "group_id": 300, "doc_id": 7001}]
 
 
 async def test_personal_index_failure_and_retry(client, seeded, fake_rag):
@@ -334,3 +351,30 @@ async def test_deleted_knowledge_base_hides_materials(client, seeded, fake_rag):
     assert material.status_code == 404
     download = await client.get(f"/api/v1/materials/{material_id}/download", headers=student)
     assert download.status_code == 404
+    assert fake_rag.deletes == [{"by": "id", "group_id": 300, "doc_id": 7001}]
+
+
+async def test_knowledge_base_delete_aborts_when_rag_delete_fails(client, seeded, fake_rag):
+    student = await auth_headers(client, "student", seeded["password"])
+    created = await client.post(
+        "/api/v1/knowledge-bases",
+        headers=student,
+        json={"name": "RAG 删除失败知识库"},
+    )
+    kb = created.json()["data"]
+    uploaded = await upload_personal(client, student, kb["id"], filename="keep.pdf")
+    material_id = uploaded.json()["data"]["id"]
+    await wait_for_personal_index(client, student, kb["id"], material_id)
+
+    fake_rag.fail_deletes = 1
+    blocked = await client.delete(f"/api/v1/knowledge-bases/{kb['id']}", headers=student)
+    assert blocked.status_code == 502
+    assert fake_rag.deletes == []
+
+    listed = await client.get("/api/v1/knowledge-bases", headers=student)
+    names = [item["name"] for item in listed.json()["data"]["items"]]
+    assert "RAG 删除失败知识库" in names
+
+    deleted = await client.delete(f"/api/v1/knowledge-bases/{kb['id']}", headers=student)
+    assert deleted.status_code == 200
+    assert fake_rag.deletes == [{"by": "id", "group_id": 300, "doc_id": 7001}]

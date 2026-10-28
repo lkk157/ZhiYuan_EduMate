@@ -28,6 +28,8 @@ python scripts/register_rag_key.py --base-url http://127.0.0.1:18000
 | POST | `/v1/kb/groups` | 创建分组，`{"name": "..."}`；同名返回 409 |
 | GET | `/v1/kb/groups/{gid}/documents` | 分组文档列表 |
 | POST | `/v1/kb/groups/{gid}/documents` | multipart 上传 `file`；单次 ≤5 个、总量 ≤200MB |
+| DELETE | `/v1/kb/groups/{gid}/documents/{did}` | 按文档 id 永久删除；重复删除返回 404 |
+| DELETE | `/v1/kb/groups/{gid}/documents?file_name=...` | 按 basename 永久删除；`+` 需编码为 `%2B` |
 | POST | `/v1/rag/ask` | `{question, group_ids, guide_mode}` → `{answer, sources, hit, intent, scope_note}` |
 | POST | `/v1/rag/retrieve` | 检索接口（EduMate 阶段一未使用） |
 | POST | `/v1/rag/ask/stream` | 流式问答（EduMate 阶段二接入） |
@@ -58,11 +60,20 @@ python scripts/register_rag_key.py --base-url http://127.0.0.1:18000
 | 问答范围 | `group_ids` 传课程组、个人组或合并去重 | 学生必须已选课程 / 拥有知识库 |
 | 健康检查 | `/healthz` + 鉴权 `GET /v1/kb/groups` | 30 秒缓存，返回 `reachable/auth_ok/latency_ms` |
 | 故障处理 | 问答超时/429/5xx/连接失败 → 友好提示 | 记录 `qa_records.status=degraded`，HTTP 仍返回 200 |
-| 重试 | 429 按 `Retry-After` 最多 1 次；索引 5xx 可重试 | 问答不对 5xx 重试；索引失败可手动重试 |
+| 重试 | 429 按 `Retry-After` 最多 1 次；索引/删除 5xx 可重试 | 问答不对 5xx 重试；索引失败可手动重试 |
+| 删除同步 | 资料/个人知识库软删除时调用 DELETE 文档接口 | 优先按 `vector_doc_id` 删除；无 id 或 404 时按 `rag_filename` 兜底；404 视为已删；成功后清空 `vector_doc_id` |
+
+### 删除与一致性
+
+- 删除资料时同步调用 RAG 删除接口，成功（含 404 已删）后才落库软删除，避免“本地已删、向量仍被检索”。
+- 知识库删除会先删除该库全部个人资料向量，再软删除知识库；任一删除失败则不改变本地状态，可重试。
+- 正在索引（`index_status=indexing`）的资料/知识库返回 `409`，避免上传与删除并发。
+- RAG 不可用时删除返回 `502`，本地数据保持不变；RAG 恢复后重试即可。
+- RAG 删除是硬删除：文档行、切片向量与原文件一并清除，恢复只能重新上传并获得新 `doc_id`。
+- 删除审计由 EduMate 保留（`material.delete` / `knowledge_base.delete`，含 `rag_vector_deleted`、`rag_synced`）。
 
 ## 已知限制
 
-- RAG `/v1` **没有删除文档接口**：EduMate 删除资料/知识库仅做业务软删除，向量仍然保留。
 - 没有课程/章节元数据接口：章节、知识点映射由 EduMate 的 MySQL 维护。
 - 没有指标接口：耗时、hit 率、失败率由 EduMate 的 `qa_records` 记录。
 - 单并发推理：问答可能等待较久，EduMate 客户端超时为 300 秒。

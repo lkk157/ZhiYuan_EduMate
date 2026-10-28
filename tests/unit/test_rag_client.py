@@ -116,6 +116,64 @@ async def test_upload_document_surfaces_rag_error_result(tmp_path):
         await client.aclose()
 
 
+async def test_delete_document_uses_group_and_doc_id():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["method"] = request.method
+        seen["path"] = request.url.path
+        seen["key"] = request.headers.get("X-API-Key")
+        return httpx.Response(200, json={"ok": True, "doc_id": 77})
+
+    client = await make_client(handler)
+    try:
+        removed = await client.delete_document(5, 77)
+    finally:
+        await client.aclose()
+
+    assert removed is True
+    assert seen == {
+        "method": "DELETE",
+        "path": "/v1/kb/groups/5/documents/77",
+        "key": "zy_test_key",
+    }
+
+
+async def test_delete_document_treats_404_as_already_deleted():
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "文档不存在"})
+
+    client = await make_client(handler)
+    try:
+        removed = await client.delete_document(5, 77)
+    finally:
+        await client.aclose()
+
+    assert removed is False
+
+
+async def test_delete_document_by_name_encodes_query():
+    seen = {}
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        seen["path"] = request.url.path
+        seen["file_name"] = request.url.params.get("file_name")
+        seen["query"] = request.url.query.decode()
+        return httpx.Response(200, json={"ok": True, "doc_id": 12})
+
+    name = "m1__第二章+A.docx"
+    client = await make_client(handler)
+    try:
+        removed = await client.delete_document_by_name(5, name)
+    finally:
+        await client.aclose()
+
+    assert removed is True
+    assert seen["path"] == "/v1/kb/groups/5/documents"
+    assert seen["file_name"] == name
+    assert "%2B" in seen["query"]
+
+
 async def test_429_is_retried_once(monkeypatch):
     attempts = {"count": 0}
 

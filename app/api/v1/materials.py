@@ -412,10 +412,13 @@ async def delete_material(
     request: Request,
     user: User = Depends(require_permission("material:upload")),
     db: AsyncSession = Depends(get_db),
+    rag_client: RagClient = Depends(get_rag_client),
 ) -> dict:
     material = await material_service.get_material(db, material_id)
     await material_service.ensure_material_access(db, material, user, management=True)
-    await material_service.soft_delete_material(db, user, material, ip=client_ip(request))
+    await material_service.soft_delete_material(
+        db, user, material, rag_client=rag_client, ip=client_ip(request)
+    )
     return success({"deleted": True, "material_id": material_id}, "资料已删除")
 
 

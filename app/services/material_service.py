@@ -511,15 +511,65 @@ async def retry_material_index(
     return material
 
 
+def material_rag_group_id(material: Material) -> int | None:
+    """Return the RAG group holding this material's vectors, if any."""
+    if material.scope == MATERIAL_SCOPE_PERSONAL:
+        knowledge_base = material.knowledge_base
+        return knowledge_base.rag_group_id if knowledge_base is not None else None
+    course = material.course
+    return course.rag_group_id if course is not None else None
+
+
+async def delete_material_rag_document(
+    material: Material,
+    rag_client: RagClient,
+    *,
+    group_id: int | None = None,
+) -> bool:
+    """Delete the material from its RAG group; 404 counts as already deleted.
+
+    RAG vectors are a derived index, so a business soft delete must remove
+    them as well. The helper returns whether a RAG call was attempted.
+    """
+    indexed = material.index_status in {INDEX_STATUS_INDEXED, INDEX_STATUS_FAILED}
+    if not indexed and not material.vector_doc_id:
+        # Never uploaded (pending upload or rejected before indexing).
+        return False
+
+    group = group_id if group_id is not None else material_rag_group_id(material)
+    if group is None:
+        return False
+
+    doc_id = material.vector_doc_id
+    if doc_id and str(doc_id).isdigit():
+        removed = await rag_client.delete_document(group, int(doc_id))
+        if not removed:
+            # A stale/missing id may hide a document re-created by a retried
+            # upload; fall back to the stable per-material filename.
+            await rag_client.delete_document_by_name(group, material.rag_filename)
+    else:
+        await rag_client.delete_document_by_name(group, material.rag_filename)
+
+    material.vector_doc_id = None
+    return True
+
+
 async def soft_delete_material(
     db: AsyncSession,
     actor: User,
     material: Material,
     *,
+    rag_client: RagClient,
     ip: str | None = None,
 ) -> None:
     if material.status == MATERIAL_STATUS_DELETED:
         raise NotFoundError("资料不存在")
+    if material.index_status == INDEX_STATUS_INDEXING:
+        raise ConflictError("资料正在索引中，请稍后再删除")
+
+    previous_doc_id = material.vector_doc_id
+    rag_synced = await delete_material_rag_document(material, rag_client)
+
     material.status = MATERIAL_STATUS_DELETED
     await record_audit(
         db,
@@ -530,6 +580,8 @@ async def soft_delete_material(
         detail={
             "title": material.title,
             "course": material.course.title if material.course else None,
+            "vector_doc_id": previous_doc_id,
+            "rag_vector_deleted": rag_synced,
         },
         ip=ip,
     )

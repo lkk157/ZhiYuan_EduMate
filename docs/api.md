@@ -83,7 +83,7 @@ JWT 载荷包含 `sub/ver/role/iat/exp`；角色变更或改密会递增 `token_
 | POST | `/materials/{id}/review` | 管理员审核 |
 | POST | `/materials/batch/review` | 批量审核 |
 | POST | `/materials/{id}/index/retry` | 重试 RAG 索引 |
-| DELETE | `/materials/{id}` | 软删除 |
+| DELETE | `/materials/{id}` | 软删除并同步删除 RAG 向量；索引中返回 409，RAG 不可用返回 502 |
 | POST | `/materials/{id}/view` | 记录浏览 |
 | GET | `/materials/{id}/preview` | 在线预览（inline，不计下载） |
 | GET | `/materials/{id}/download` | 下载（计下载次数） |
@@ -96,7 +96,7 @@ JWT 载荷包含 `sub/ver/role/iat/exp`；角色变更或改密会递增 `token_
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | GET/POST | `/knowledge-bases` | 我的知识库列表/创建；首次访问自动创建默认库 |
-| PUT/DELETE | `/knowledge-bases/{id}` | 重命名/软删除（默认库不可删） |
+| PUT/DELETE | `/knowledge-bases/{id}` | 重命名/软删除（默认库不可删）；删除前同步清理该库全部 RAG 向量 |
 | GET/POST | `/knowledge-bases/{id}/materials` | 个人资料列表/上传 |
 | DELETE | `/knowledge-bases/{id}/materials/{material_id}` | 删除个人资料 |
 | POST | `/knowledge-bases/{id}/materials/{material_id}/index/retry` | 重试索引 |

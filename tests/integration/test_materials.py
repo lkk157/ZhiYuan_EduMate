@@ -20,7 +20,9 @@ class FakeRagClient:
     def __init__(self) -> None:
         self.ensure_calls: list[str] = []
         self.uploads: list[dict] = []
+        self.deletes: list[dict] = []
         self.fail_uploads = 0
+        self.fail_deletes = 0
         self._groups: dict[str, int] = {}
 
     async def health(self) -> dict:
@@ -55,6 +57,20 @@ class FakeRagClient:
             }
         )
         return {"ok": True, "doc_id": 9000 + len(self.uploads)}
+
+    async def delete_document(self, group_id: int, doc_id: int) -> bool:
+        if self.fail_deletes > 0:
+            self.fail_deletes -= 1
+            raise RagError("模拟 RAG 删除失败")
+        self.deletes.append({"by": "id", "group_id": group_id, "doc_id": doc_id})
+        return True
+
+    async def delete_document_by_name(self, group_id: int, file_name: str) -> bool:
+        if self.fail_deletes > 0:
+            self.fail_deletes -= 1
+            raise RagError("模拟 RAG 删除失败")
+        self.deletes.append({"by": "name", "group_id": group_id, "file_name": file_name})
+        return True
 
 
 @pytest.fixture
@@ -477,9 +493,61 @@ async def test_soft_delete_hides_material_and_blocks_download(
     async with session_factory() as session:
         row = await session.scalar(select(Material).where(Material.id == material_id))
         assert row.status == "deleted"
+        assert row.vector_doc_id is None
+
+    assert fake_rag.deletes == [{"by": "id", "group_id": 100, "doc_id": 9001}]
 
     logs = await client.get("/api/v1/admin/audit-logs?action=material.delete", headers=admin)
     assert logs.json()["data"]["total"] == 1
+
+
+async def test_soft_delete_aborts_when_rag_delete_fails(client, seeded, fake_rag):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    course, _, _ = await build_approved_course(client, teacher, admin, "RAG 删除失败课程")
+
+    uploaded = await upload_material(client, teacher, course["id"], title="RAG 删除失败资料")
+    material_id = uploaded.json()["data"]["id"]
+    await client.post(
+        f"/api/v1/materials/{material_id}/review",
+        headers=admin,
+        json={"decision": "approve"},
+    )
+    indexed = await wait_for_index(client, admin, material_id)
+    assert indexed.json()["data"]["index_status"] == "indexed"
+
+    fake_rag.fail_deletes = 1
+    blocked = await client.delete(f"/api/v1/materials/{material_id}", headers=teacher)
+    assert blocked.status_code == 502
+    assert fake_rag.deletes == []
+
+    detail = await client.get(f"/api/v1/materials/{material_id}", headers=teacher)
+    assert detail.json()["data"]["status"] == "approved"
+    assert detail.json()["data"]["vector_doc_id"] == "9001"
+
+    deleted = await client.delete(f"/api/v1/materials/{material_id}", headers=teacher)
+    assert deleted.status_code == 200
+    assert fake_rag.deletes == [{"by": "id", "group_id": 100, "doc_id": 9001}]
+
+
+async def test_soft_delete_rejects_material_being_indexed(
+    client, seeded, fake_rag, session_factory
+):
+    teacher = await auth_headers(client, "teacher", seeded["password"])
+    admin = await auth_headers(client, "admin", seeded["password"])
+    course, _, _ = await build_approved_course(client, teacher, admin, "索引中删除课程")
+
+    uploaded = await upload_material(client, teacher, course["id"], title="正在索引资料")
+    material_id = uploaded.json()["data"]["id"]
+    async with session_factory() as session:
+        row = await session.scalar(select(Material).where(Material.id == material_id))
+        row.index_status = "indexing"
+        await session.commit()
+
+    response = await client.delete(f"/api/v1/materials/{material_id}", headers=teacher)
+    assert response.status_code == 409
+    assert "索引中" in response.json()["message"]
+    assert fake_rag.deletes == []
 
 
 async def test_material_access_guards_and_rag_health(client, seeded, fake_rag):

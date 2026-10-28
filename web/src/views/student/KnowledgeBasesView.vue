@@ -176,7 +176,7 @@ async function removeKb(kb) {
   }
   try {
     await ElMessageBox.confirm(
-      `确定删除知识库「${kb.name}」吗？其中的个人资料将不再可访问，RAG 向量暂不删除。`,
+      `确定删除知识库「${kb.name}」吗？其中的个人资料将不再可访问，并同步清理 RAG 向量。`,
       '删除知识库',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )
@@ -258,7 +258,7 @@ async function retry(row) {
 async function removeMaterial(row) {
   try {
     await ElMessageBox.confirm(
-      `确定删除资料「${row.title}」吗？删除后无法再访问，RAG 向量暂不删除。`,
+      `确定删除资料「${row.title}」吗？删除后无法再访问，并同步清理 RAG 向量。`,
       '删除资料',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )

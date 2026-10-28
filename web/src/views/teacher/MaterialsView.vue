@@ -290,7 +290,7 @@ async function retry(row) {
 async function remove(row) {
   try {
     await ElMessageBox.confirm(
-      `确定删除资料「${row.title}」吗？删除后学生将无法访问，但 RAG 向量暂不删除。`,
+      `确定删除资料「${row.title}」吗？删除后将同步清理 RAG 向量，学生无法访问且不可恢复。`,
       '删除资料',
       { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
     )

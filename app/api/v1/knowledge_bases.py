@@ -113,9 +113,12 @@ async def delete_knowledge_base(
     request: Request,
     user: User = Depends(require_role(ROLE_STUDENT)),
     db: AsyncSession = Depends(get_db),
+    rag_client: RagClient = Depends(get_rag_client),
 ) -> dict:
     kb = await knowledge_base_service.get_owned_kb(db, user, kb_id)
-    await knowledge_base_service.soft_delete_knowledge_base(db, user, kb, ip=client_ip(request))
+    await knowledge_base_service.soft_delete_knowledge_base(
+        db, user, kb, rag_client=rag_client, ip=client_ip(request)
+    )
     return success({"deleted": True, "knowledge_base_id": kb_id}, "知识库已删除")
 
 
@@ -177,11 +180,14 @@ async def delete_personal_material(
     request: Request,
     user: User = Depends(require_role(ROLE_STUDENT)),
     db: AsyncSession = Depends(get_db),
+    rag_client: RagClient = Depends(get_rag_client),
 ) -> dict:
     kb = await knowledge_base_service.get_owned_kb(db, user, kb_id)
     material = await _load_personal_material(db, kb, material_id)
     await material_service.ensure_material_access(db, material, user, management=True)
-    await material_service.soft_delete_material(db, user, material, ip=client_ip(request))
+    await material_service.soft_delete_material(
+        db, user, material, rag_client=rag_client, ip=client_ip(request)
+    )
     return success({"deleted": True, "material_id": material_id}, "资料已删除")
 
 

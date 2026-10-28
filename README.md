@@ -5,7 +5,7 @@
 - **EduMate 主服务**：用户/权限、课程体系、资料元数据、问答记录、推荐、学情与治理。
 - **知源 RAG 服务**（已有，独立部署）：文档解析、向量检索与 LLM 生成，通过 `/v1` HTTP API 接入。
 
-> 当前进度：**阶段一（P1.1–P1.9）已完成，tag `v0.1.0-phase1`**。三角色权限、课程/资料审核与真实 RAG 索引、选课与邀请码、个人知识库、带引用问答、基础推荐、资料在线预览、自动审核与批量审核均已交付；`docker compose up -d --build` 可一键启动，演示数据与冒烟脚本已通过验收。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)，API 见 [docs/api.md](docs/api.md)。
+> 当前进度：**阶段一（P1.1–P1.9）已完成，tag `v0.1.0-phase1`**。三角色权限、课程/资料审核与真实 RAG 索引、选课与邀请码、个人知识库、带引用问答、基础推荐、资料在线预览、自动审核与批量审核均已交付；P1.9.1 已支持软删除同步清理 RAG 向量；`docker compose up -d --build` 可一键启动，演示数据与冒烟脚本已通过验收。完整阶段计划见 [docs/project-flow.md](docs/project-flow.md)，需求见 [docs/requirements.md](docs/requirements.md)，API 见 [docs/api.md](docs/api.md)。
 
 ## 技术栈
 
@@ -162,6 +162,13 @@ EduMate 使用 `X-API-Key` 鉴权。首次接入时运行：
 - PDF 与图片使用浏览器原生预览；DOCX 使用 `docx-preview`、PPTX 使用 `pptx-preview` 在浏览器内解析渲染。
 - 预览接口 `GET /api/v1/materials/{id}/preview` 以 inline 方式返回原文件，并校验课程选课/个人库归属。
 - 预览会记录浏览行为，但**不会增加下载次数**；预览弹窗内可直接下载原文件。
+
+## 删除与向量一致性
+
+- 删除课程资料或个人资料时，EduMate 会同步调用 RAG 的文档删除接口，先清理向量再落库软删除。
+- 优先按 `vector_doc_id` 删除；文档 id 缺失或返回 404 时按 `rag_filename` 兜底；404 视为已删除。
+- 正在索引的资料或知识库返回 409；RAG 不可用时返回 502，本地数据保持不变，恢复后重试即可。
+- 删除知识库会先清理其全部个人资料向量；删除成功后在审计中记录 `rag_vector_deleted` / `rag_synced`。
 
 ## 审核机制
 
